@@ -35,7 +35,22 @@ Vite is configured with a relative base so static assets can be served from a re
 
 ## Data and accuracy notes
 
-The new workspace currently saves its records to the current browser's localStorage. This is suitable for a prototype, not multi-user or confidential production use. The live OSINT workspace reuses the existing Gemini + Google Search grounding capability. It is not a direct forensic acquisition engine, and the new workspace does not yet include an independently validated threat-intelligence feed. Risk scores are screening estimates based on user-entered responses; they are not guarantees, certifications, legal advice or independently verified audit conclusions. For individual assessments, use only authorized, lawful cybersecurity exposure assessments and do not infer character or criminality.
+The new risk/GRC workspace stores its records in the current browser's localStorage; that storage is suitable for a prototype, not multi-user or confidential production use. Live OSINT depends on server configuration and public search coverage; it is not a direct forensic acquisition engine or an exhaustive scan. Risk scores are screening estimates based on user-entered responses; they are not guarantees, certifications, legal advice or independently verified audit conclusions. For individual assessments, use only authorized, lawful cybersecurity exposure assessments and do not infer character or criminality.
+
+## Local antivirus, packet analysis and SIEM integrations
+
+The **Antivirus & File Reputation** and **Network & Device Diagnostics** pages include a Local Security Sensor panel. The website is the UI; the sensor runs on the same computer and can connect to:
+
+- **ClamAV** for signature-based scanning of a selected file.
+- **YARA** for rule-based scanning when a trusted rules directory is configured.
+- **Wireshark/TShark** for saved PCAP/PCAPNG analysis and explicitly user-initiated, bounded live captures from a selected local interface.
+- **Suricata** for IDS alerts from the capture and its locally installed configuration/rules.
+- **CISA KEV** for the official public known-exploited-vulnerability catalog.
+- **Splunk HEC** as an optional destination for scan/capture summaries. Splunk is not bundled or hosted by GitHub Pages.
+
+On Windows, run `scripts/install-free-security-tools.ps1` to attempt winget installation of ClamAV, Wireshark and Suricata. Then start `scripts/setup-sensor.ps1` in a new PowerShell window. The terminal prints a private sensor token; paste it into the Local Security Sensor panel. See [local-sensor/README.md](local-sensor/README.md) for setup, dependencies, permissions and limitations. For live capture on Windows, Wireshark/Npcap and permission to capture on the chosen adapter may be required.
+
+The sensor binds only to `127.0.0.1` and authenticates requests. Live capture starts only after a user clicks the button, uses the selected interface, and lasts at most 30 seconds. It does not block traffic, change firewall settings, quarantine files or continuously monitor the whole computer. A result with no detections is not a guarantee of safety.
 
 ## Security before production
 
@@ -54,7 +69,7 @@ Review Firebase authentication, Firestore security rules, data retention, tenant
 - Configure the Firebase project in `.firebaserc` and verify it matches `firebase-applet-config.json` before deployment. Deploy rules/functions with `firebase deploy --only firestore:rules,functions` from a trusted development environment.
 - Cloud Functions deployment requires the Firebase Blaze billing plan. Test Stripe in test mode first. See `docs/COMMERCIAL_LAUNCH.md`.
 
-**Important production security:** The browser bundle must not contain Gemini/server API secrets. This project has client-side AI code from the earlier implementation; move AI calls behind a protected backend and rotate any key that may have been exposed before commercial launch.
+**Important production security:** The frontend calls authenticated Firebase Cloud Functions for Gemini operations. Verify that the deployed bundle contains no real provider keys, rotate any previously exposed keys, and confirm access controls and rate limits before commercial launch.
 
 
 ## Live OSINT and AI deployment

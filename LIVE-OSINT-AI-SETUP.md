@@ -44,7 +44,7 @@ GitHub Pages deployment does not deploy Firebase Functions or Firestore rules. T
 - OSINT lookups show configured provider results and grounding-source links. A missing result means **unknown**, not safe.
 - AI findings are advisory. Verify source references and findings before acting.
 - The browser file page computes a local SHA-256 hash and checks reputation; it does not scan the whole computer and does not upload the file.
-- Live packet capture, endpoint antivirus/EDR, process inspection, financial transaction monitoring, and automatic system remediation require separate trusted integrations or signed endpoint agents. These features must remain clearly marked as unavailable until those integrations are built and tested.
+- The optional local sensor now provides selected-file scanning (ClamAV and optional YARA), saved PCAP/PCAPNG analysis, and explicitly user-initiated live TShark capture bounded to 30 seconds. It does not provide continuous EDR, process inspection, financial transaction monitoring, automatic system remediation, quarantine, or traffic blocking.
 - Risk score is shown as “Not assessed” until a validated assessment source is recorded. No synthetic score or sample packet telemetry should be presented as live data.
 
 ## Release checks
@@ -56,3 +56,22 @@ GitHub Pages deployment does not deploy Firebase Functions or Firestore rules. T
 - [ ] Confirm owner account `tongaigodfreymapiye@gmail.com` sees lifetime Premium without upgrade prompts.
 - [ ] Confirm a separate customer account cannot self-grant Premium and sees only its plan entitlements.
 - [ ] Test rate limiting, access rules, privacy, retention, deletion, backups, and incident response before inviting paying customers.
+
+## Local endpoint scanning, live packet capture and Splunk
+
+These integrations run on each user's computer, not on GitHub Pages. Read [local-sensor/README.md](local-sensor/README.md) for the complete setup.
+
+On Windows, from a fresh PowerShell window at the repository root:
+
+```powershell
+.\scripts\install-free-security-tools.ps1
+.\scripts\setup-sensor.ps1
+```
+
+The first script attempts to install ClamAV, Wireshark/TShark and Suricata using winget. Review package prompts; if winget is unavailable, install from the official links in the local sensor documentation. The second script installs the local Python service dependencies, creates a private random token and runs the sensor on `127.0.0.1:8765`.
+
+In CyberAmour's **Antivirus & File Reputation** or **Network & Device Diagnostics** page, paste the token printed in the terminal and click **Connect sensor**. The panel reports the tools actually detected. File scanning uses ClamAV and optional YARA; packet analysis supports saved captures and explicit live captures (5–30 seconds) through TShark. On Windows, live capture may require Npcap and adapter capture permissions. Suricata alerts depend on its configuration and rules, which must be installed and updated independently.
+
+Splunk forwarding is optional. Configure `SPLUNK_HEC_URL`, `SPLUNK_HEC_TOKEN` and `SPLUNK_INDEX` in `local-sensor/.env`. Use HTTPS unless this is an isolated lab. Only summaries are forwarded, not raw capture payloads or file contents. A Splunk installation and valid entitlement are not included with this app.
+
+The sensor does not provide continuous EDR, malware quarantine, firewall blocking or automatic remediation. It captures only after a user action, on the selected interface, for a short duration. Verify licenses and provider terms before commercial distribution.
