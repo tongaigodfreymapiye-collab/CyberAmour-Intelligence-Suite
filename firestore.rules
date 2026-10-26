@@ -94,7 +94,10 @@ service cloud.firestore {
              data.uid == request.auth.uid &&
              isValidEmail(data.email) &&
              (!('securityScore' in data) || data.securityScore is number) &&
-             (!('isPremium' in data) || data.isPremium is bool);
+             (!('isPremium' in data) || data.isPremium is bool) &&
+             (!('subscriptionTier' in data) || data.subscriptionTier is string) &&
+             (!('role' in data) || data.role == 'customer') &&
+             (!('isAdmin' in data) || data.isAdmin == false);
     }
 
     function isValidBreach(data) {
@@ -152,21 +155,35 @@ service cloud.firestore {
     }
 
     match /activationCodes/{codeId} {
-      allow read: if isAuthenticated();
+      // Codes are not readable or consumable directly from customer clients. Callable Functions use Admin SDK.
+      allow read: if isAdmin();
       allow create: if isAdmin() &&
                     hasRequiredFields(['code', 'tier', 'createdBy', 'createdAt', 'used']) &&
                     request.resource.data.used == false;
-      allow update: if isAuthenticated() &&
-                    resource.data.used == false && 
-                    request.resource.data.used == true &&
-                    request.resource.data.usedBy == request.auth.uid &&
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt']);
+      allow update, delete: if isAdmin();
+    }
+
+    // Billing entitlements are server-managed. Customers can read only their own subscription.
+    // Cloud Functions using the Admin SDK can write these records after verified payment webhooks.
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) &&
+                    request.resource.data.isPremium == false &&
+                    request.resource.data.subscriptionTier == 'free' &&
+                    (!('isBusiness' in request.resource.data) || request.resource.data.isBusiness == false) &&
+                    (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+                    (!('role' in request.resource.data) || request.resource.data.role == 'customer');
+      // Customers may update their own profile, but cannot grant themselves paid plans or admin privileges.
+      allow update: if isAdmin() || (isOwner(userId) && isValidUser(request.resource.data) &&
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                      'isPremium', 'subscriptionTier', 'isBusiness', 'status', 'isAdmin', 'role',
+                      'stripeCustomerId', 'subscriptionStatus', 'subscriptionExpiresAt', 'planId'
+                    ]));
       
       match /breaches/{breachId} {
         allow read: if isOwner(userId);

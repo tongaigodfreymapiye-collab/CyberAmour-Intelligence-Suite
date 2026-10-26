@@ -44,3 +44,14 @@ Review Firebase authentication, Firestore security rules, data retention, tenant
 ## Developer
 
 **Developed by Engineer and Software Developer - Tongai Godfrey Mapiye - Cyber Fortress Technologies.**
+
+
+## Customer accounts and commercial subscriptions
+
+- Customer-facing sign-in supports Google and email/password. Email/password registrations require email verification; password-reset emails are supported.
+- Firestore customer profiles and user subcollections are keyed by Firebase Authentication UID. Deploy and test `firestore.rules` before using real customer data.
+- Subscription entitlements are protected from browser-side self-upgrades. The `functions/` folder contains a Firebase Cloud Functions + Stripe Checkout/webhook starter; paid plans remain inactive until Stripe Prices, secrets, webhook events, and Functions deployment are configured.
+- Configure the Firebase project in `.firebaserc` and verify it matches `firebase-applet-config.json` before deployment. Deploy rules/functions with `firebase deploy --only firestore:rules,functions` from a trusted development environment.
+- Cloud Functions deployment requires the Firebase Blaze billing plan. Test Stripe in test mode first. See `docs/COMMERCIAL_LAUNCH.md`.
+
+**Important production security:** The browser bundle must not contain Gemini/server API secrets. This project has client-side AI code from the earlier implementation; move AI calls behind a protected backend and rotate any key that may have been exposed before commercial launch.
