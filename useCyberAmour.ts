@@ -516,6 +516,25 @@ export function useCyberAmour() {
     }
   };
 
+  const createAlert = async (title: string, message: string, severity: string = 'low') => {
+    if (!user) return false;
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'alerts'), {
+        uid: user.uid,
+        title: String(title).slice(0, 180),
+        message: String(message).slice(0, 5000),
+        severity: ['low', 'medium', 'high', 'critical'].includes(severity.toLowerCase()) ? severity.toLowerCase() : 'low',
+        isRead: false,
+        type: 'application',
+        createdAt: new Date().toISOString()
+      });
+      return true;
+    } catch (error) {
+      console.error('Could not create alert. Check Firestore rules.', error);
+      return false;
+    }
+  };
+
   const detectAnomalies = async () => {
     if (!user || activityLogs.length < 1) return;
 
@@ -651,7 +670,7 @@ export function useCyberAmour() {
     }
   };
 
-  const performPhishingScan = async (type: 'phishing' | 'email' | 'sms' | 'phone' | 'name' | 'company' | 'username' | 'domain' | 'url' | 'file' | 'antivirus', content: string, fileData?: { mimeType: string, data: string, name: string }) => {
+  const performPhishingScan = async (type: 'phishing' | 'email' | 'sms' | 'phone' | 'name' | 'company' | 'username' | 'domain' | 'url' | 'ip' | 'file' | 'antivirus', content: string, fileData?: { mimeType: string, data: string, name: string }) => {
     if (!user) return;
     if (type === 'antivirus') throw new Error('Device-wide antivirus scanning is not available from a browser. Use the Antivirus & File Reputation page for a real hash reputation lookup, or deploy a signed endpoint agent. No device scan was performed.');
     const ownerAccount = isPermanentOwner(user);
@@ -667,7 +686,7 @@ export function useCyberAmour() {
 
     try {
       // Real live OSINT/reputation workflow: provider credentials stay in Cloud Functions.
-      const liveKinds: Record<string, string> = { email: 'email', phone: 'phone', name: 'name', company: 'company', username: 'username', domain: 'domain', url: 'url' };
+      const liveKinds: Record<string, string> = { email: 'email', phone: 'phone', name: 'name', company: 'company', username: 'username', domain: 'domain', url: 'url', ip: 'ip' };
       if (liveKinds[type]) {
         const liveLookup = httpsCallable(functions, 'analyzeCyberIntel', { timeout: 65000 });
         const liveResponse: any = await liveLookup({ kind: liveKinds[type], target: content });
@@ -698,7 +717,7 @@ export function useCyberAmour() {
         model: "gemini-2.5-flash",
       };
 
-      const isOsint = ['email', 'phone', 'name', 'company', 'username', 'domain'].includes(type);
+      const isOsint = ['email', 'phone', 'name', 'company', 'username', 'domain', 'ip'].includes(type);
 
       if (isOsint) {
         prompt = `Act as CyberAmour's cybersecurity-focused public-source intelligence analyst. Search the public web using the configured Google Search grounding tool for the ${type} "${content}". Use only sources relevant to lawful cybersecurity, fraud-prevention, supplier due diligence, identity-protection or digital-footprint verification. Do not infer identity from a name alone, and do not generate missing facts.
@@ -718,10 +737,9 @@ Return only JSON matching the supplied response schema. Do not include unsupport
         ${type === 'url' ? 'Specifically analyze the URL structure, domain reputation, typosquatting indicators, and known malicious patterns. In your analysis, include clear sections/details for: Domain Reputation, SSL Certificate Status, and Detected Redirection Patterns.' : ''}
         ${type === 'phishing' || type === 'email' ? 'Specifically analyze the email content/headers for Sender Reputation, SPF/DKIM/DMARC records, and any detected Suspicious Headers.' : ''}
         ${type === 'file' ? 'Specifically analyze the provided file. Determine its purpose, identify any malicious code, embedded macros, hidden payloads, or suspicious behaviors. Assess if the file is safe to open or execute.' : ''}
-        ${type === 'antivirus' ? 'Act as a deep system antivirus scanner. Perform a comprehensive heuristic and behavioral analysis on the provided content. Detect zero-day threats, rootkits, advanced persistent threats (APTs), and sophisticated obfuscation techniques. Assess full system impact if executed.' : ''}
         Content: ${content}`;
         
-        if ((type === 'file' || type === 'antivirus') && fileData) {
+        if (type === 'file' && fileData) {
           modelOptions.contents = [prompt, { inlineData: { data: fileData.data, mimeType: fileData.mimeType } }];
         } else {
           modelOptions.contents = prompt;

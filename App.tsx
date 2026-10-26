@@ -149,6 +149,7 @@ import { playClickSound, playScanSound, playSuccessSound, playErrorSound, playAl
 import { WorldClock } from './components/WorldClock';
 import { DeviceHealthChart } from './components/DeviceHealthChart';
 import EnterpriseRiskWorkspace from './components/EnterpriseRiskWorkspace';
+import LocalSecuritySensor from './components/LocalSecuritySensor';
 
 type Screen = 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
 
@@ -1178,7 +1179,7 @@ function AntivirusCenter() {
       setStatus('error'); setMessage(e?.message || 'The live reputation service could not be reached. No clean verdict is assumed.');
     }
   };
-  return <div className="max-w-5xl mx-auto space-y-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & File Reputation</h1><p className="text-text-dim mt-2 max-w-2xl">Calculate a file's SHA-256 fingerprint locally and check its reputation against a configured live threat-intelligence provider.</p></div><span className="text-xs border border-accent/30 rounded-full px-3 py-2 text-accent">Reputation lookup · not full-device antivirus</span></div><div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm text-text-dim">Important: a website running in a browser cannot scan your entire laptop, memory, running processes or all installed apps. This page does not upload your file; it submits only the SHA-256 hash to the configured reputation service. Unknown hashes are not proof of safety.</div><div className="glass-card p-6 space-y-5"><label className="block text-sm font-semibold">Select a file to check<input type="file" className="block w-full mt-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" onChange={e => chooseFile(e.target.files?.[0] || null)} /></label>{file && <div className="rounded-xl border border-border p-4 space-y-2"><div className="flex flex-wrap justify-between gap-2"><strong>{file.name}</strong><span className="text-text-dim text-xs">{(file.size/1024).toFixed(1)} KB · {file.type || 'Unknown MIME type'}</span></div><div className="text-xs text-text-dim break-all">SHA-256: {hash || 'Calculating…'}</div></div>}<div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50" disabled={!hash || status==='checking' || status==='hashing'} onClick={checkReputation}>{status==='checking' ? 'Checking live reputation…' : 'Check live reputation'}</button><button className="rounded-xl border border-border px-5 py-3" onClick={() => {setFile(null);setHash('');setReport(null);setMessage('');setStatus('idle');}}>Clear</button></div>{status==='hashing' && <p className="text-sm text-text-dim">Calculating SHA-256 locally…</p>}{message && <p role="status" className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">{message}</p>}{report && <div className="rounded-xl border border-border p-5 space-y-3"><h2 className="text-lg font-bold">Live provider response</h2>{report.notFound ? <p className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">This hash was not found in the provider database. This is an <strong>unknown result</strong>, not a clean verdict. Use a trusted endpoint security product for a full scan.</p> : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Malicious',report.malicious],['Suspicious',report.suspicious],['Harmless',report.harmless],['Undetected',report.undetected]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-surface p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-2xl font-black">{value ?? '—'}</div></div>)}</div>}<p className="text-xs text-text-dim">Source: VirusTotal file reputation · Retrieved {report.retrievedAt || 'just now'}. Reputation results are indicative and can be incomplete.</p>{report.permalink && <a href={report.permalink} target="_blank" rel="noreferrer" className="text-primary underline text-sm">Open provider report</a>}</div>}</div></div>;
+  return <div className="max-w-5xl mx-auto space-y-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & File Reputation</h1><p className="text-text-dim mt-2 max-w-2xl">Calculate a file's SHA-256 fingerprint locally and check its reputation against a configured live threat-intelligence provider.</p></div><span className="text-xs border border-accent/30 rounded-full px-3 py-2 text-accent">Reputation lookup · not full-device antivirus</span></div><div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm text-text-dim">Important: a website running in a browser cannot scan your entire laptop, memory, running processes or all installed apps. This page does not upload your file to the reputation provider; it submits only the SHA-256 hash. Unknown hashes are not proof of safety.</div><LocalSecuritySensor mode="antivirus" /><div className="glass-card p-6 space-y-5"><label className="block text-sm font-semibold">Select a file to check<input type="file" className="block w-full mt-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" onChange={e => chooseFile(e.target.files?.[0] || null)} /></label>{file && <div className="rounded-xl border border-border p-4 space-y-2"><div className="flex flex-wrap justify-between gap-2"><strong>{file.name}</strong><span className="text-text-dim text-xs">{(file.size/1024).toFixed(1)} KB · {file.type || 'Unknown MIME type'}</span></div><div className="text-xs text-text-dim break-all">SHA-256: {hash || 'Calculating…'}</div></div>}<div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50" disabled={!hash || status==='checking' || status==='hashing'} onClick={checkReputation}>{status==='checking' ? 'Checking live reputation…' : 'Check live reputation'}</button><button className="rounded-xl border border-border px-5 py-3" onClick={() => {setFile(null);setHash('');setReport(null);setMessage('');setStatus('idle');}}>Clear</button></div>{status==='hashing' && <p className="text-sm text-text-dim">Calculating SHA-256 locally…</p>}{message && <p role="status" className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">{message}</p>}{report && <div className="rounded-xl border border-border p-5 space-y-3"><h2 className="text-lg font-bold">Live provider response</h2>{report.notFound ? <p className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">This hash was not found in the provider database. This is an <strong>unknown result</strong>, not a clean verdict. Use a trusted endpoint security product for a full scan.</p> : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Malicious',report.malicious],['Suspicious',report.suspicious],['Harmless',report.harmless],['Undetected',report.undetected]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-surface p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-2xl font-black">{value ?? '—'}</div></div>)}</div>}<p className="text-xs text-text-dim">Source: VirusTotal file reputation · Retrieved {report.retrievedAt || 'just now'}. Reputation results are indicative and can be incomplete.</p>{report.permalink && <a href={report.permalink} target="_blank" rel="noreferrer" className="text-primary underline text-sm">Open provider report</a>}</div>}</div></div>;
 }
 
 function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
@@ -1642,8 +1643,6 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
   const [isRefreshingIntel, setIsRefreshingIntel] = useState(false);
   const [deviceIntelSummary, setDeviceIntelSummary] = useState<string | null>(null);
   const [showComplianceInfo, setShowComplianceInfo] = useState(false);
-  const [isRTAActive, setIsRTAActive] = useState(true);
-  const [isRTAAnimating, setIsRTAAnimating] = useState(false);
   const fetchingIntel = useRef(false);
   const [isAutoRectifying, setIsAutoRectifying] = useState(false);
 
@@ -1942,89 +1941,34 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
         </h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="glass-card p-6 space-y-4">
-            <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim mb-4">Core Defenses</h4>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-border">
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg transition-colors", isRTAActive ? "bg-primary/20" : "bg-white/10")}>
-                    <ShieldAlert size={16} className={cn("transition-colors", isRTAActive ? "text-primary" : "text-text-dim")} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold flex items-center gap-2">
-                       Real-time Antivirus
-                       {isRTAAnimating && <div className="w-2 h-2 bg-primary rounded-full animate-ping"></div>}
-                    </div>
-                    <div className="text-[10px] text-text-dim">
-                       {isRTAActive ? (isRTAAnimating ? "Scanning in background..." : "Active memory & file scanning") : "Protection Disabled"}
-                    </div>
-                  </div>
-                </div>
-                <div 
-                  onClick={() => {
-                    setIsRTAActive(!isRTAActive);
-                    if (!isRTAActive) {
-                      createAlert && createAlert("Antivirus", "Real-time Antivirus activated. Scanning files in the background...", "low");
-                      setIsRTAAnimating(true);
-                      setTimeout(() => setIsRTAAnimating(false), 5000);
-                    } else {
-                      createAlert && createAlert("Antivirus", "Real-time Antivirus disabled. Your device is vulnerable.", "high");
-                    }
-                  }}
-                  className={cn("w-10 h-5 rounded-full relative cursor-pointer outline-none transition-colors", isRTAActive ? "bg-primary" : "bg-border")}
-                >
-                  <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", isRTAActive ? "right-1" : "left-1")}></div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-border">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#F59E0B]/10 rounded-lg"><Network size={16} className="text-[#F59E0B]" /></div>
-                  <div>
-                    <div className="text-sm font-bold">No-Root Firewall</div>
-                    <div className="text-[10px] text-text-dim">Local VPN loopback blocking trackers</div>
-                  </div>
-                </div>
-                <div className="w-10 h-5 rounded-full bg-[#F59E0B] relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
-              </div>
-            </div>
-            <button 
-              onClick={() => {
-                 setActiveScreen('scan');
-                 // Simulate triggering an antivirus scan by selecting 'antivirus' automatically in the scan center if we had a way to pass that state
-                 // The user will be redirected to the Scan Center
-              }}
-              className="w-full py-3 mt-2 bg-surface border border-border rounded-xl text-xs font-bold hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
-            >
-              <RefreshCw size={14} className={cn("text-primary", isRTAAnimating && "animate-spin")} /> Run Deep System Scan
-            </button>
-          </div>
-
-          <div className="glass-card p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">App Permission Monitor</h4>
-              <span className="text-[10px] bg-accent/20 text-accent px-2 py-1 rounded font-bold">3 ALERTS</span>
-            </div>
-            <p className="text-[10px] text-text-dim">Detecting apps that can steal data or access sensitive hardware.</p>
-            <div className="space-y-2 mt-2">
-              {[
-                { app: 'Social Connect', perm: 'Camera & Contacts', risk: 'High' },
-                { app: 'Flashlight Pro', perm: 'Precise Location', risk: 'High' },
-                { app: 'Weather Widget', perm: 'Microphone', risk: 'Medium' }
-              ].map((app, i) => (
-                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-danger/5 border border-danger/20 rounded-xl gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-surface border border-border rounded flex items-center justify-center text-text-dim"><Smartphone size={12} /></div>
-                    <div>
-                      <div className="text-xs font-bold">{app.app}</div>
-                      <div className="text-[9px] text-text-dim font-mono">{app.perm}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-danger">{app.risk} Risk</span>
-                    <button className="text-[10px] font-bold text-white bg-danger/80 hover:bg-danger px-3 py-1.5 rounded transition-colors">Revoke</button>
-                  </div>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Connected protection tools</h4>
+            <p className="text-sm text-text-dim">The website does not run background antivirus, memory inspection, or firewall filtering by itself. Connect the local sensor to use installed open-source scanning and packet-analysis tools.</p>
+            <div className="space-y-3">
+              {[['File malware scan', 'ClamAV signature scan + optional YARA rules'], ['Network packet analysis', 'Wireshark / TShark with optional Suricata IDS alerts'], ['SIEM export', 'Optional Splunk HTTP Event Collector summaries']].map(([title, detail]) => (
+                <div key={title} className="flex items-start gap-3 rounded-xl border border-border bg-white/5 p-3">
+                  <ShieldAlert size={17} className="mt-0.5 text-primary shrink-0" />
+                  <div><div className="text-sm font-bold">{title}</div><div className="text-xs text-text-dim mt-1">{detail}</div></div>
+                  <span className="ml-auto text-[10px] whitespace-nowrap text-amber-200">Check sensor</span>
                 </div>
               ))}
             </div>
+            <button onClick={() => setActiveScreen('antivirus')} className="w-full py-3 bg-primary rounded-xl text-sm font-bold text-white hover:opacity-90 transition-opacity">Open Antivirus & File Scan</button>
+            <button onClick={() => setActiveScreen('network')} className="w-full py-3 bg-surface border border-border rounded-xl text-sm font-bold hover:bg-white/5 transition-colors">Open Network Diagnostics</button>
+          </div>
+          <div className="glass-card p-6 space-y-4">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Operating-system controls</h4>
+            <p className="text-sm text-text-dim">These controls are managed by your operating system or a separately installed endpoint agent, not this browser tab.</p>
+            {[
+              ['Real-time antivirus / EDR', 'Not verified by CyberAmour'],
+              ['Firewall and network blocking', 'Not controlled by this website'],
+              ['Installed-app permissions', 'Not exposed to this browser'],
+              ['Ransomware / behaviour monitoring', 'No endpoint agent connected']
+            ].map(([title, state]) => (
+              <div key={title} className="flex items-center justify-between gap-3 border-b border-border/60 py-3 last:border-0">
+                <div className="text-sm font-medium">{title}</div>
+                <span className="text-[10px] uppercase tracking-wide text-amber-200 text-right">{state}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -4568,7 +4512,7 @@ function SettingsScreen({ profile, logout, updateUserPreferences, changePassword
           >
             <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
               <Network size={18} className={profile?.isAutoMonitoringEnabled ? "text-primary" : ""} />
-              <span className="text-sm font-medium">No-Root Firewall (Auto Monitoring)</span>
+              <span className="text-sm font-medium">Account Activity Anomaly Monitoring</span>
             </div>
             <div className={cn(
               "w-10 h-5 rounded-full relative transition-colors",
@@ -5122,35 +5066,25 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
         <div className="flex items-center gap-2">
           <div className="status-badge bg-amber-500/10 text-amber-200 border-amber-500/30">
             <ShieldAlert size={14} className="mr-1" />
-            Sensor not connected
+            Check local sensor below
           </div>
         </div>
       </div>
 
+      <LocalSecuritySensor mode="all" />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Packet Volume Real-time Chart Section */}
-        <div className="glass-card p-6 space-y-6 lg:col-span-2">
+        {/* Network telemetry: never draw synthetic packet counts. */}
+        <div className="glass-card p-6 space-y-4 lg:col-span-2">
           <div className="flex items-center gap-3">
-             <Activity className="text-[#3B82F6]" size={24} />
-             <h3 className="text-xl font-bold">Live Packet Volume</h3>
+            <Activity className="text-primary" size={24} />
+            <div>
+              <h3 className="text-xl font-bold">Network Telemetry</h3>
+              <p className="text-sm text-text-dim mt-1">No live packet source is connected to this browser session.</p>
+            </div>
           </div>
-          <p className="text-sm text-text-dim">No live packet data is available in this browser session. Connect a network sensor before using packet-volume charts.</p>
-          <div className="w-full h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={packetVolumeData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <RechartsLine type="monotone" dataKey="incoming" stroke="#3B82F6" strokeWidth={3} dot={false} isAnimationActive={false} name="Incoming Packets" />
-                <RechartsLine type="monotone" dataKey="outgoing" stroke="#10B981" strokeWidth={3} dot={false} isAnimationActive={false} name="Outgoing Packets" />
-                <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="time" hide />
-                <YAxis stroke="#94A3B8" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: '8px' }}
-                  itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                  labelStyle={{ display: 'none' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-text-dim">
+            <strong className="text-amber-200">Waiting for real telemetry.</strong> Start the CyberAmour Local Security Sensor above and analyze a Wireshark PCAP/PCAPNG capture. This screen will not generate sample packet counts, claim traffic is safe, or report that traffic was blocked.
           </div>
         </div>
 
@@ -5175,148 +5109,56 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
           </div>
         </div>
 
-        {/* Packet Filtering Section */}
-        <div className="glass-card p-6 space-y-6 lg:col-span-2">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-3">
-                <Network className="text-primary" size={24} />
-                <h3 className="text-xl font-bold">Packet Filter & CyberAmour Analysis</h3>
-              </div>
-              <p className="text-xs text-text-dim mt-1">Live packet inspection requires a separately deployed network sensor. This browser session does not capture packets.</p>
-            </div>
-            <button 
-              onClick={handleNetworkScan}
-              disabled={isScanningNetwork}
-              className="flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary hover:bg-primary/30 rounded-xl transition-all font-bold text-xs"
-            >
-              <RefreshCw size={14} className={cn(isScanningNetwork && "animate-spin")} /> Refetch Packets
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-border pb-2">
-                 <h4 className="text-sm font-bold uppercase tracking-widest text-[#00E5FF]">Wireshark Mode</h4>
-                 <span className="text-[10px] text-text-dim px-2 bg-surface rounded-full">Live Capture</span>
-              </div>
-              <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 scrollbar-none font-mono text-[10px] bg-black/40 p-4 rounded-xl border border-border/50 relative">
-                <div className="grid grid-cols-5 gap-2 pb-2 border-b border-border text-text-dim uppercase font-bold sticky top-0 bg-black/40 backdrop-blur pb-2 z-10">
-                  <span>Source</span>
-                  <span>Dest</span>
-                  <span>Proto</span>
-                  <span>Size</span>
-                  <span>Status</span>
-                </div>
-            {packets.map((p) => (
-              <div 
-                key={p.id} 
-                onClick={() => setSelectedPacket(p)}
-                className="grid grid-cols-5 gap-2 py-2 border-b border-border/30 hover:bg-surface transition-colors cursor-pointer"
-              >
-                <span className="truncate">{p.source}</span>
-                <span className="truncate">{p.dest}</span>
-                <span className="text-primary">{p.protocol}</span>
-                <span>{p.size}</span>
-                <span className={cn(
-                  "font-bold",
-                  p.status === 'Safe' ? "text-success" : 
-                  p.status === 'SessionHijack' ? "text-danger animate-pulse" :
-                  p.status === 'Suspicious' ? "text-accent" : "text-danger"
-                )}>
-                  {p.status === 'SessionHijack' ? 'HIJACK ATTEMPT' : p.status}
-                </span>
-              </div>
-            ))}
-          </div>
-            </div>
-
-            <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-border pb-2">
-                   <h4 className="text-sm font-bold uppercase tracking-widest text-[#4ADE80]">CyberAmour Log Analysis</h4>
-                   <span className="text-[10px] text-[#4ADE80] px-2 bg-[#4ADE80]/10 border border-[#4ADE80]/20 rounded">Forwarding Active</span>
-                </div>
-                <div className="space-y-2 h-[350px] overflow-y-auto pr-2 scrollbar-none font-mono text-[10px] bg-[#000000] p-4 rounded-xl border border-border/50">
-                  {packets.slice(0, 50).map((p, i) => (
-                    <div key={i} className="py-2 border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <div className="text-[9px] text-[#4ADE80]/70 mb-1">
-                        [{new Date(Date.now() - i * 15000).toISOString()}] [INFO] cyberamourd - idx=network sourcetype=stream:tcp
-                      </div>
-                      <div className={cn(
-                         "break-all text-white/90",
-                         p.status !== 'Safe' && "text-danger/90 font-bold"
-                      )}>
-                         src_ip="{p.source}" dest_ip="{p.dest}" protocol="{p.protocol}" bytes_in={p.size} action="{p.status === 'Safe' ? 'allowed' : 'blocked'}" {p.status !== 'Safe' ? `risk_factor="high" signature="Potential ${p.status} Traffic"` : 'risk_factor="low"'} src_port={0} dest_port={p.protocol === 'HTTPS' ? 443 : 80}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        {/* Packet analysis / SIEM status. Actual PCAP processing is in LocalSecuritySensor above. */}
+        <div className="glass-card p-6 space-y-4 lg:col-span-2">
+          <div className="flex items-center gap-3">
+            <Network className="text-primary" size={24} />
+            <div>
+              <h3 className="text-xl font-bold">Packet Analysis & SIEM Integration</h3>
+              <p className="text-sm text-text-dim mt-1">Real saved-capture analysis runs through TShark/Wireshark in the local sensor. Optional summaries can be forwarded to Splunk HEC.</p>
             </div>
           </div>
-          
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <ShieldAlert size={20} className="text-danger" />
-              Network Threat Analysis
-            </h3>
-            <div className="space-y-3">
-              {anomalies.length === 0 ? (
-                <div className="p-4 text-center bg-success/5 border border-success/20 rounded-xl">
-                  <p className="text-xs text-success font-bold">No active network threats detected.</p>
-                </div>
-              ) : (
-                anomalies.map((a, i) => (
-                  <div key={i} className="p-4 bg-surface/50 border border-border/50 rounded-xl space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-text-main">Source: {a.source}</span>
-                      <span className={cn(
-                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                        a.status === 'Malicious' ? "bg-danger text-white" : "bg-accent text-bg"
-                      )}>
-                        {a.status === 'Malicious' ? 'High Risk' : 'Medium Risk'}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-text-dim">
-                      {a.status === 'SessionHijack' 
-                        ? `A session-hijacking indicator was reported for ${a.source}. No traffic was blocked by this browser-only app.`
-                        : `Detected ${a.protocol} anomaly from ${a.source} targeting your local gateway. Potential ${a.status === 'Malicious' ? 'Botnet' : 'Reconnaissance'} activity.`
-                      }
-                    </p>
-                    <div className="flex gap-2">
-                        <button className="text-[10px] font-bold text-primary hover:underline px-2 py-1 bg-primary/10 rounded">Isolate IP</button>
-                        <button className="text-[10px] font-bold text-[#4ADE80] hover:underline px-2 py-1 bg-[#4ADE80]/10 rounded flex items-center gap-1"><ArrowRight size={10} /> Send to CyberAmour</button>
-                    </div>
-                  </div>
-                ))
-              )}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-border p-4 space-y-2">
+              <h4 className="font-bold text-sm">Wireshark / TShark</h4>
+              <p className="text-xs text-text-dim">Open the Local Security Sensor panel above, connect it, select a saved PCAP/PCAPNG file, and choose “Analyze PCAP”. The report includes decoded protocol fields and Suricata alerts when available.</p>
+              <a href="https://www.wireshark.org/download.html" target="_blank" rel="noreferrer" className="text-xs text-primary underline">Official Wireshark download</a>
+            </div>
+            <div className="rounded-xl border border-border p-4 space-y-2">
+              <h4 className="font-bold text-sm">Splunk HTTP Event Collector</h4>
+              <p className="text-xs text-text-dim">Splunk is not running inside GitHub Pages. Configure an authorized Splunk HEC URL and token in the local sensor’s private .env file to forward summarized events. Raw packets and file contents are not sent.</p>
+              <a href="https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector" target="_blank" rel="noreferrer" className="text-xs text-primary underline">Splunk HEC documentation</a>
             </div>
           </div>
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-amber-100">
+            No live traffic capture, automatic IP isolation, or traffic blocking is enabled by this web app. Use your operating-system firewall or a separately deployed, authorized IDS/IPS for enforcement.
+          </div>
+        </div>
 
           <div className="p-4 bg-bg/50 rounded-xl border border-border/50 space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">DDoS & Botnet Shield</h4>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={14} className="text-primary" />
-                <span>Session Hijacking Shield</span>
+                <span>Session Hijacking Detection</span>
               </div>
-              <span className="text-success font-bold">AUTO-BLOCK</span>
+              <span className="text-amber-200 font-bold">NOT CONNECTED</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <ZapOff size={14} className="text-danger" />
-                <span>DoS Attack Prevention</span>
+                <span>DoS / DDoS Prevention</span>
               </div>
-              <span className="text-success font-bold">ENABLED</span>
+              <span className="text-amber-200 font-bold">NOT CONFIGURED</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <Crosshair size={14} className="text-accent" />
                 <span>Botnet Node Blocking</span>
               </div>
-              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
+              <span className="text-accent font-bold">NO BLOCKING ACTION</span>
             </div>
           </div>
-        </div>
 
         {/* Device & Malware Section */}
         <div className="glass-card p-6 space-y-6">
@@ -5365,17 +5207,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
               <div className="space-y-4">
                 <div className="p-8 text-center bg-success/5 border border-success/20 rounded-2xl">
                   <ShieldCheck size={32} className="text-success mx-auto mb-2" />
-                  <p className="text-sm font-bold text-success">No viruses or bad software detected.</p>
-                </div>
-                <div className="p-4 bg-accent/5 border border-accent/20 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle size={20} className="text-accent" />
-                    <div>
-                      <div className="text-sm font-bold">App Permission Alert</div>
-                      <div className="text-[10px] text-text-dim">3 apps detected with excessive permissions capable of data theft (Camera, Contacts, Location).</div>
-                    </div>
-                  </div>
-                  <button className="text-[10px] font-black uppercase tracking-widest bg-accent/20 hover:bg-accent/40 text-accent px-3 py-1.5 rounded transition-all">Review</button>
+                  <p className="text-sm font-bold text-amber-200">Endpoint scan not performed.</p><p className="text-xs text-text-dim mt-2">Connect the local sensor and use the file scanner above, or install a trusted endpoint security product. This browser cannot inspect the full device.</p>
                 </div>
               </div>
             ) : (
@@ -5387,7 +5219,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                     className="text-[10px] font-black uppercase tracking-widest bg-success text-black px-3 py-1.5 rounded hover:bg-success/80 transition-all flex items-center gap-1 min-w-max"
                   >
                     <ShieldCheck size={12} />
-                    Rectify All
+                    Dismiss displayed findings
                   </button>
                 </div>
                 {threats.map((t, i) => (
@@ -5405,23 +5237,12 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                       </div>
                     </div>
                     <div className="flex justify-end gap-2">
-                      <button 
+                      <button
                         onClick={() => handleClean(i)}
-                        className="text-[10px] font-black uppercase tracking-widest bg-success/20 hover:bg-success/40 text-success px-3 py-1.5 rounded transition-all"
+                        className="text-[10px] font-black uppercase tracking-widest bg-surface hover:bg-white/10 text-text-main px-3 py-1.5 rounded transition-all"
+                        title="Removes this finding from the current UI only; does not modify a file"
                       >
-                        Clean
-                      </button>
-                      <button 
-                        onClick={() => handleQuarantine(i)}
-                        className="text-[10px] font-black uppercase tracking-widest bg-accent/20 hover:bg-accent/40 text-accent px-3 py-1.5 rounded transition-all"
-                      >
-                        Quarantine
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(i)}
-                        className="text-[10px] font-black uppercase tracking-widest bg-danger/20 hover:bg-danger/40 text-danger px-3 py-1.5 rounded transition-all"
-                      >
-                        Delete
+                        Dismiss finding
                       </button>
                     </div>
                   </div>
@@ -5435,37 +5256,37 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={14} className="text-primary" />
-                <span>Real-time Antivirus (Deep Scan)</span>
+                <span>Full-device antivirus</span>
               </div>
-              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
+              <span className="text-accent font-bold">NO BLOCKING ACTION</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <Network size={14} className="text-[#F59E0B]" />
-                <span>No-Root Firewall</span>
+                <span>Operating-system firewall</span>
               </div>
-              <span className="text-success font-bold">ENABLED</span>
+              <span className="text-amber-200 font-bold">NOT VERIFIED</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <EyeOff size={14} className="text-accent" />
-                <span>App Permission Monitor</span>
+                <span>Installed-app permission monitoring</span>
               </div>
-              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
+              <span className="text-accent font-bold">NO BLOCKING ACTION</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <ZapOff size={14} className="text-danger" />
-                <span>Ransomware Guard</span>
+                <span>Ransomware protection</span>
               </div>
-              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
+              <span className="text-accent font-bold">NO BLOCKING ACTION</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <Activity size={14} className="text-[#3B82F6]" />
-                <span>Endpoint Behavior Monitoring</span>
+                <span>Endpoint behaviour monitoring</span>
               </div>
-              <span className="text-success font-bold">ENABLED</span>
+              <span className="text-amber-200 font-bold">NOT VERIFIED</span>
             </div>
           </div>
 

@@ -23,8 +23,6 @@ async function testConnection() {
 testConnection();
 
 export { 
-  auth,
-  functions,
   httpsCallable,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
