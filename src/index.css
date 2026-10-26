@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg: #090B14;
+  --surface: #101423;
+  --card-bg: rgba(16, 20, 35, 0.4);
+  --border: rgba(0, 229, 255, 0.1);
+  --primary: #00E5FF;
+  --secondary: #8B5CF6;
+  --accent: #F59E0B;
+  --text-main: #F8FAFC;
+  --text-dim: #94A3B8;
+  --danger: #EF4444;
+  --success: #10B981;
+}
+
+.light {
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --card-bg: rgba(0, 0, 0, 0.02);
+  --border: rgba(0, 0, 0, 0.08);
+  --primary: #00B4D8;
+  --secondary: #6D28D9;
+  --accent: #D97706;
+  --text-main: #0F172A;
+  --text-dim: #64748B;
+  --danger: #DC2626;
+  --success: #059669;
+}
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-card-bg: var(--card-bg);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-text-main: var(--text-main);
+  --color-text-dim: var(--text-dim);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text-main antialiased selection:bg-primary/30 selection:text-white;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-white;
+  }
+}
+
+.glass-card {
+  @apply bg-surface/70 backdrop-blur-xl border border-border rounded-2xl shadow-xl transition-all duration-300;
+}
+
+.glass-card:hover {
+  @apply border-primary/20 shadow-[0_8px_30px_rgba(0,229,255,0.08)];
+}
+
+.cyber-gradient {
+  @apply bg-gradient-to-br from-primary via-secondary to-primary;
+  background-size: 200% 200%;
+  animation: gradient 6s ease infinite;
+}
+
+.logo-gradient {
+  @apply bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent font-display font-extrabold;
+}
+
+.status-badge {
+  @apply bg-success/15 border border-success/30 text-success px-3 py-1 rounded-full text-xs font-bold tracking-wide shadow-[0_0_12px_rgba(16,185,129,0.2)];
+}
+
+.alert-item {
+  @apply bg-surface/80 border-l-4 border-primary p-4 mb-3 text-sm rounded-r-xl transition-all duration-300 hover:bg-surface;
+}
+
+.alert-item-critical {
+  @apply border-l-danger bg-danger/5 hover:bg-danger/10;
+}
+
+.ai-bubble {
+  @apply bg-gradient-to-br from-surface to-bg border border-border/50 p-4 rounded-2xl rounded-tr-none text-sm leading-relaxed text-text-main/90 shadow-lg relative overflow-hidden;
+}
+.ai-bubble::before {
+  content: '';
+  @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-secondary to-primary opacity-50;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-bg;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-surface border border-border rounded-full hover:bg-primary/50 transition-colors;
+}
+
+/* Animations */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+

@@ -1,0 +1,209 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string
+    //   - securityScore: number
+    //   - lastScanAt: string (ISO 8601)
+    //   - isPremium: bool
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: users/{uid}/breaches
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - source: string (required)
+    //   - breachDate: string
+    //   - riskLevel: string (Low, Medium, High)
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: users/{uid}/scans
+    // Fields:
+    //   - uid: string (required)
+    //   - type: string (link, email, sms)
+    //   - content: string (required)
+    //   - riskScore: number
+    //   - verdict: string (Safe, Suspicious, Malicious)
+    //   - analysis: string
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: users/{uid}/vault
+    // Fields:
+    //   - uid: string (required)
+    //   - title: string (required)
+    //   - type: string (password, document, note)
+    //   - encryptedData: string (required)
+    //   - createdAt: string (ISO 8601)
+    //
+    // Collection: users/{uid}/alerts
+    // Fields:
+    //   - uid: string (required)
+    //   - title: string (required)
+    //   - message: string (required)
+    //   - severity: string (info, warning, critical)
+    //   - isRead: bool
+    //   - createdAt: string (ISO 8601)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (request.auth.token.email == 'tgmapiye@gmail.com' || request.auth.token.email == 'tongaigodfreymapiye@gmail.com');
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             (!('securityScore' in data) || data.securityScore is number) &&
+             (!('isPremium' in data) || data.isPremium is bool);
+    }
+
+    function isValidBreach(data) {
+      return hasRequiredFields(['uid', 'email', 'source']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.source is string && data.source.size() < 100 &&
+             (!('details' in data) || (data.details is string && data.details.size() < 1000)) &&
+             (!('isDarkWeb' in data) || data.isDarkWeb is bool);
+    }
+
+    function isValidScan(data) {
+      return hasRequiredFields(['uid', 'type']) &&
+             data.uid == request.auth.uid &&
+             data.type in ['link', 'email', 'sms', 'darkweb', 'phone', 'name', 'phishing'] &&
+             (!('content' in data) || (data.content is string && data.content.size() < 5000)) &&
+             (!('summary' in data) || (data.summary is string && data.summary.size() < 1000)) &&
+             (!('findingsCount' in data) || data.findingsCount is number) &&
+             (!('findings' in data) || data.findings is list) &&
+             (!('maxRisk' in data) || data.maxRisk is string);
+    }
+
+    function isValidVaultItem(data) {
+      return hasRequiredFields(['uid', 'title', 'encryptedData']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() < 100 &&
+             data.encryptedData is string && data.encryptedData.size() < 10000;
+    }
+
+    function isValidAlert(data) {
+      return hasRequiredFields(['uid', 'title', 'message']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() < 100 &&
+             data.message is string && data.message.size() < 1000;
+    }
+
+    function isValidActivityLog(data) {
+      return hasRequiredFields(['action', 'createdAt']) &&
+             data.action is string && data.action.size() < 100 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidScoreHistory(data) {
+      return hasRequiredFields(['score', 'timestamp']) &&
+             data.score is number && data.score >= 0 && data.score <= 100 &&
+             isValidDateString(data.timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /activationCodes/{codeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() &&
+                    hasRequiredFields(['code', 'tier', 'createdBy', 'createdAt', 'used']) &&
+                    request.resource.data.used == false;
+      allow update: if isAuthenticated() &&
+                    resource.data.used == false && 
+                    request.resource.data.used == true &&
+                    request.resource.data.usedBy == request.auth.uid &&
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt']);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      
+      match /breaches/{breachId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidBreach(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /scans/{scanId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidScan(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /vault/{itemId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidVaultItem(request.resource.data);
+        allow update: if isOwner(userId) && isValidVaultItem(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /alerts/{alertId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidAlert(request.resource.data);
+        allow update: if isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+        allow delete: if isOwner(userId);
+      }
+
+      match /activityLogs/{logId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidActivityLog(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /scoreHistory/{historyId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidScoreHistory(request.resource.data);
+      }
+    }
+  }
+}

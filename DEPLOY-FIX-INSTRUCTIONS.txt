@@ -1,0 +1,19 @@
+CYBERAMOUR INTELLIGENCE SUITE — GITHUB PAGES FIX
+
+WHY THE WEBSITE WAS BLANK
+The published HTML was serving /src/main.tsx directly. That is Vite development source and returns 404 on GitHub Pages. The workflow in this ZIP builds the React/Vite project and deploys the generated dist/ folder instead.
+
+UPLOAD
+1. Extract this ZIP.
+2. Upload/replace all extracted files and folders in the ROOT of:
+   https://github.com/tongaigodfreymapiye-collab/CyberAmour-Intelligence-Suite
+3. Ensure the hidden .github/workflows/deploy.yml file is included. If using GitHub's web uploader, hidden folders can be missed; use GitHub Desktop or git if necessary.
+4. Commit to the main branch.
+5. In repository Settings > Pages > Build and deployment > Source, select GitHub Actions (not Deploy from a branch).
+6. Open Actions and inspect the “Build and deploy CyberAmour to GitHub Pages” run. Wait until both build and deploy succeed.
+7. Open https://tongaigodfreymapiye-collab.github.io/CyberAmour-Intelligence-Suite/ and hard-refresh with Ctrl+F5.
+
+IMPORTANT
+- Do not set Pages to publish the repository root or /src. The workflow publishes dist/.
+- If the workflow fails, open Actions, select the run, and read the first failed step.
+- This package does not automatically revoke exposed API keys. Review the Google API key alert separately, rotate/revoke any valid exposed key, and do not put private API keys in frontend code. A static frontend cannot keep a secret API key private.

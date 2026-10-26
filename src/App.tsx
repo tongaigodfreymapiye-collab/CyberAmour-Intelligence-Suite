@@ -1,0 +1,7353 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+  ComposableMap,
+  Geographies,
+  Geography,
+  Marker,
+  Line
+} from "react-simple-maps";
+import { 
+  Shield, 
+  Search, 
+  Bell, 
+  Lock, 
+  MessageSquare, 
+  Settings, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Zap, 
+  LogOut, 
+  User as UserIcon,
+  ChevronRight,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  UserSearch,
+  Mail,
+  Link as LinkIcon,
+  MessageCircle,
+  Globe,
+  Activity,
+  HardDrive,
+  FileText,
+  Moon,
+  Sun,
+  CloudRain,
+  CloudLightning,
+  Play,
+  Wind,
+  Thermometer,
+  GraduationCap,
+  HelpCircle,
+  Trophy,
+  ArrowRight,
+  XCircle,
+  CreditCard,
+  Check,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
+  RefreshCw,
+  Users,
+  Ghost,
+  Fingerprint,
+  AlertCircle,
+  Network,
+  Smartphone,
+  Cpu,
+  ShieldCheck,
+  ShieldAlert,
+  ZapOff,
+  Clock,
+  Crosshair,
+  Notebook,
+  Skull,
+  Copy,
+  Key,
+  Database,
+  Phone,
+  Download,
+  LayoutList,
+  Square,
+  CheckSquare,
+  ChevronDown,
+  FileDown,
+  Sprout,
+  Image,
+  Star,
+  Scan,
+  QrCode,
+  CheckCircle,
+  Loader,
+  Briefcase,
+  X,
+  Terminal,
+  Twitter,
+  Linkedin,
+  Github,
+  Send,
+  Loader2,
+  BookOpen,
+  PlayCircle,
+  Crown,
+  BellRing
+} from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell,
+  Legend,
+  AreaChart,
+  Area,
+  LineChart,
+  Line as RechartsLine
+} from 'recharts';
+import { useCyberAmour } from './hooks/useCyberAmour';
+import { cn } from './lib/utils';
+import ReactMarkdown from 'react-markdown';
+import { QRCodeSVG } from 'qrcode.react';
+import { db } from './firebase';
+import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+
+const CyberAmourLogo = ({ size = 72, className = "" }: { size?: number, className?: string }) => (
+  <img src={`${import.meta.env.BASE_URL}assets/cyberamour-logo.png`} width={size * 1.55} height={size} alt="CyberAmour — Intelligence, Protection, Resilience" className={`object-contain ${className}`} style={{ maxWidth: size * 1.8 }} />
+);
+
+function ExpandableSection({ title, icon, color, children, defaultOpen = false }: { title: string, icon?: React.ReactNode, color: string, children: React.ReactNode, defaultOpen?: boolean }) {
+  return (
+    <details className="group pt-3 border-t border-border mt-3 cursor-pointer" open={defaultOpen}>
+      <summary className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center justify-between list-none" style={{ color }}>
+        <div className="flex items-center gap-2">
+          {icon}
+          {title}
+        </div>
+        <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="mt-2 -mb-1 animate-in slide-in-from-top-2 duration-200">
+        {children}
+      </div>
+    </details>
+  );
+}
+
+import { playClickSound, playScanSound, playSuccessSound, playErrorSound, playAlertSound } from './utils/sounds';
+import { WorldClock } from './components/WorldClock';
+import { DeviceHealthChart } from './components/DeviceHealthChart';
+import EnterpriseRiskWorkspace from './components/EnterpriseRiskWorkspace';
+
+type Screen = 'dashboard' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
+
+export default function App() {
+  // Add global click sound
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('[role="button"]')) {
+        playClickSound();
+      }
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  const { 
+    user, 
+    profile, 
+    breaches, 
+    scans, 
+    alerts, 
+    activityLogs,
+    scoreHistory,
+    weather,
+    loading, 
+    is2FAVerified,
+    fetchThreatIntelSummary,
+    fetchDeviceIntelSummary,
+    login, 
+    logout,
+    updateUserPreferences,
+    changePassword,
+    performPhishingScan, 
+    checkBreaches,
+    createAlert,
+    askAI,
+    getGlobalThreatData,
+    generate2FASecret,
+    verify2FACode,
+    enable2FA,
+    disable2FA,
+    verifySession2FA,
+    updateLogRetention,
+    clearOldLogs,
+    toggleAutoMonitoring,
+    autoRectify,
+    upgradeSubscription,
+    rewardUserWithScan,
+    generateActivationCode,
+    redeemActivationCode,
+    scanDarkWeb,
+    scanNetwork,
+    scanDevice,
+    optimizePhone,
+    monitorTransactions,
+    logActivity,
+    aiAdvice,
+    detectAnomalies
+  } = useCyberAmour();
+
+  const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
+  const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
+
+  useEffect(() => {
+    const handleDotUpdate = (e: any) => {
+      setGlobalHardwareDot(prev => {
+        if (prev.show === e.detail.show && prev.color === e.detail.color) return prev;
+        return e.detail;
+      });
+    };
+    window.addEventListener('updateGlobalHardwareDot', handleDotUpdate);
+    return () => window.removeEventListener('updateGlobalHardwareDot', handleDotUpdate);
+  }, []);
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved ? saved === 'dark' : true;
+  });
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [activeLinkSource, setActiveLinkSource] = useState<{ id: string, name: string } | null>(null);
+  const [linkages, setLinkages] = useState<{sourceId: string, sourceName: string, targetId: string, targetName: string, type: string}[]>([]);
+  const [showLinkModal, setShowLinkModal] = useState<{targetId: string, targetName: string} | null>(null);
+  const [showDownloadQR, setShowDownloadQR] = useState(false);
+
+  const handleConfirmLink = (type: string) => {
+    if (activeLinkSource && showLinkModal) {
+      setLinkages(prev => [...prev, {
+        sourceId: activeLinkSource.id,
+        sourceName: activeLinkSource.name,
+        targetId: showLinkModal.targetId,
+        targetName: showLinkModal.targetName,
+        type
+      }]);
+      setShowLinkModal(null);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      logActivity('screen_view', { screen: activeScreen });
+    }
+  }, [activeScreen, user]);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+    }
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    if (user && !loading && profile) {
+      const hasSeenTutorial = localStorage.getItem(`tutorial_seen_${user.uid}`);
+      if (!hasSeenTutorial) {
+        setShowTutorial(true);
+      }
+    }
+  }, [user, loading, profile]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center space-y-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="font-bold text-danger text-lg tracking-widest uppercase"
+        >
+          Protected by CyberAmour
+        </motion.div>
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <CyberAmourLogo size={144} className="drop-shadow-[0_0_20px_rgba(0,229,255,0.5)]" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full space-y-8"
+        >
+          <div className="space-y-4">
+            <h1 className="text-4xl font-extrabold tracking-tight logo-gradient">CyberAmour</h1>
+            <p className="text-text-dim text-lg uppercase tracking-wider text-sm">Digital intelligence, protected.</p>
+            <div className="font-bold text-danger text-lg tracking-widest uppercase">
+              Protected by CyberAmour
+            </div>
+          </div>
+          <div className="flex justify-center">
+            <div className="p-4 bg-primary/20 rounded-3xl border border-primary/30">
+              <CyberAmourLogo size={192} className="shadow-[0_0_20px_rgba(0,229,255,0.5)]" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-4 w-full">
+            <button
+              onClick={login}
+              className="w-full py-4 px-6 bg-primary hover:bg-primary/90 text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-primary/20"
+            >
+              <UserIcon size={20} />
+              Sign in with Google
+            </button>
+            <button
+              onClick={() => setShowDownloadQR(true)}
+              className="w-full py-4 px-6 bg-surface/80 border border-accent/20 hover:bg-surface/100 text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-3"
+            >
+              <QrCode size={20} />
+              Scan to Download App
+            </button>
+          </div>
+          
+          {showDownloadQR && (
+            <DownloadQRModal onClose={() => setShowDownloadQR(false)} />
+          )}
+
+          <div className="mt-8 flex flex-col items-center text-center gap-3">
+            <CyberAmourLogo size={120} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
+            <p className="text-[10px] text-text-dim uppercase tracking-widest">
+              Developed by Engineer and Software Developer - Tongai Godfrey Mapiye - Cyber Fortress Technologies.
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (!is2FAVerified) {
+    return <TwoFactorVerify verify={verifySession2FA} logout={logout} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-bg flex flex-col lg:flex-row overflow-hidden">
+      <RealtimeAlerts alerts={alerts} />
+      {showDownloadQR && (
+        <DownloadQRModal onClose={() => setShowDownloadQR(false)} />
+      )}
+      {/* Sidebar - Hidden on mobile, shown on desktop */}
+      <aside className="hidden lg:flex w-64 bg-surface border-r border-border p-8 flex-col shrink-0">
+        <div className="flex items-center gap-3 mb-1">
+          <CyberAmourLogo size={120} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
+          <div className="logo-gradient text-2xl font-extrabold tracking-tighter">CyberAmour</div>
+        </div>
+        <div className="text-[10px] text-text-dim uppercase tracking-widest mb-12">Digital intelligence, protected.</div>
+        
+        <nav className="flex-1">
+          <ul className="space-y-2">
+            <SidebarItem active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={18} />} label="Dashboard" />
+            <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Cyber Forensics" />
+            <SidebarItem active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={18} />} label="Risk Intelligence" />
+            <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC Assessments" />
+            <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="OSINT Workspace" />
+            <SidebarItem active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={18} />} label="Investigation Cases" />
+            <SidebarItem active={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} icon={<FileText size={18} />} label="Risk Reports" />
+            <SidebarItem active={activeScreen === 'network'} onClick={() => setActiveScreen('network')} icon={<Network size={18} />} label="Network & Device" />
+            <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Dark Web Monitor" />
+            <SidebarItem active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={18} />} label="AI Assistant" />
+            <SidebarItem active={activeScreen === 'features'} onClick={() => setActiveScreen('features')} icon={<Star size={18} className="text-accent"/>} label="Key Features" />
+            <SidebarItem active={activeScreen === 'guide'} onClick={() => setActiveScreen('guide')} icon={<BookOpen size={18} className="text-success" />} label="User Guide" />
+            <SidebarItem active={activeScreen === 'tasks'} onClick={() => setActiveScreen('tasks')} icon={<CheckSquare size={18} />} label="Task Manager" />
+            <SidebarItem active={activeScreen === 'clock'} onClick={() => setActiveScreen('clock')} icon={<Clock size={18} />} label="World Clock" />
+            <SidebarItem active={activeScreen === 'alerts'} onClick={() => setActiveScreen('alerts')} icon={<Bell size={18} />} label="Alerts Feed" />
+            <SidebarItem active={activeScreen === 'pricing'} onClick={() => setActiveScreen('pricing')} icon={<CreditCard size={18} />} label="Upgrade" />
+            {(user.email === 'tgmapiye@gmail.com' || user.email === 'tongaigodfreymapiye@gmail.com') && (
+              <SidebarItem active={activeScreen === 'admin'} onClick={() => setActiveScreen('admin')} icon={<ShieldAlert size={18} />} label="Admin Queue" />
+            )}
+            <SidebarItem active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={18} />} label="Settings" />
+            <SidebarItem active={false} onClick={() => setShowTutorial(true)} icon={<HelpCircle size={18} />} label="Tutorials" />
+          </ul>
+        </nav>
+
+        <div className="mt-auto pt-5 border-t border-border flex flex-col gap-4">
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="flex items-center justify-between text-text-dim hover:text-primary transition-colors hover:bg-surface/50 p-2 rounded-xl group w-[calc(100%+16px)] -mx-2"
+          >
+            <div className="flex items-center gap-3">
+              {isDarkMode ? <Moon size={18} /> : <Sun size={18} />}
+              <span className="text-sm font-medium">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
+            </div>
+            <div className={cn(
+              "w-10 h-5 rounded-full relative transition-colors shadow-inner flex-shrink-0",
+              isDarkMode ? "bg-primary" : "bg-text-dim/30"
+            )}>
+              <div 
+                className={cn(
+                  "absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300",
+                  isDarkMode ? "translate-x-[20px]" : "translate-x-[2px]"
+                )}
+              />
+            </div>
+          </button>
+          <div className="text-[10px] text-text-dim leading-relaxed flex flex-col gap-3">
+            <CyberAmourLogo size={120} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
+            Developed by Engineer and Software Developer - Tongai Godfrey Mapiye - Cyber Fortress Technologies.
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Header */}
+      <header className="lg:hidden p-6 flex items-center justify-between bg-surface border-b border-border sticky top-0 z-50">
+        <div className="flex items-center gap-2">
+          <CyberAmourLogo size={96} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
+          <div className="logo-gradient text-xl font-extrabold tracking-tighter">CyberAmour</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-text-dim hover:text-primary transition-colors">
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button onClick={() => setActiveScreen('alerts')} className="relative p-2 text-text-dim">
+            <Bell size={20} />
+            {alerts.some(a => !a.isRead) && <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" />}
+          </button>
+          <img src={user.photoURL || ""} alt="" className="w-8 h-8 rounded-full border border-border" referrerPolicy="no-referrer" />
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-6 lg:p-10 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.05),transparent_40%)] relative">
+        {globalHardwareDot.show && (
+          <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-border shadow-lg cursor-help transition-all" title="Hardware Monitor Active">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim">SYS</span>
+            <div className={cn("w-2 h-2 rounded-full animate-pulse shadow-[0_0_8px_currentColor]", globalHardwareDot.color)} />
+          </div>
+        )}
+        <div className="max-w-4xl mx-auto space-y-8">
+          {profile?.status === 'flagged' && !(user.email === 'tgmapiye@gmail.com' || user.email === 'tongaigodfreymapiye@gmail.com') && (
+            <div className="bg-[#EF4444] text-white p-4 text-center font-bold text-sm z-50 rounded-xl mb-4 border border-[#EF4444]/50 shadow-lg shadow-[#EF4444]/20 flex items-center justify-center gap-2">
+              <ShieldAlert size={18} />
+              Your account is under administrative review due to suspicious signup activity. You have read-only access.
+            </div>
+          )}
+          <AnimatePresence mode="wait">
+            <motion.div className={profile?.status === 'flagged' && !(user.email === 'tgmapiye@gmail.com' || user.email === 'tongaigodfreymapiye@gmail.com') ? "pointer-events-none opacity-80" : ""}>
+              {activeScreen === 'risk' && <EnterpriseRiskWorkspace key="risk" section="risk" />}
+              {activeScreen === 'grc' && <EnterpriseRiskWorkspace key="grc" section="grc" />}
+              {activeScreen === 'osint' && <EnterpriseRiskWorkspace key="osint" section="osint" onLiveOsint={performPhishingScan} />}
+              {activeScreen === 'cases' && <EnterpriseRiskWorkspace key="cases" section="cases" />}
+              {activeScreen === 'reports' && <EnterpriseRiskWorkspace key="reports" section="reports" />}
+              {activeScreen === 'dashboard' && <Dashboard key="dashboard" askAI={askAI} setActiveScreen={setActiveScreen} fetchDeviceIntelSummary={fetchDeviceIntelSummary} fetchThreatIntelSummary={fetchThreatIntelSummary} profile={profile} breaches={breaches} scans={scans}  globalThreats={getGlobalThreatData()} activityLogs={activityLogs} scoreHistory={scoreHistory} detectAnomalies={detectAnomalies} weather={weather} toggleAutoMonitoring={toggleAutoMonitoring} autoRectify={autoRectify} optimizePhone={optimizePhone} createAlert={createAlert} performScan={performPhishingScan} logActivity={logActivity} />}
+              {activeScreen === 'scan' && <ScanCenter key="scan" askAI={askAI} scans={scans} performScan={performPhishingScan} rewardUserWithScan={rewardUserWithScan} checkBreaches={checkBreaches} logActivity={logActivity} setActiveScreen={setActiveScreen} profile={profile} activeLinkSource={activeLinkSource} setActiveLinkSource={setActiveLinkSource} setShowLinkModal={setShowLinkModal} linkages={linkages} />}
+              {activeScreen === 'network' && <NetworkDeviceMonitor key="network" setActiveScreen={setActiveScreen} scanNetwork={scanNetwork} scanDevice={scanDevice} monitorTransactions={monitorTransactions} profile={profile} activeLinkSource={activeLinkSource} setActiveLinkSource={setActiveLinkSource} setShowLinkModal={setShowLinkModal} linkages={linkages} />}
+              {activeScreen === 'darkweb' && <DarkWebMonitor key="darkweb" askAI={askAI} profile={profile} breaches={breaches} scans={scans} scanDarkWeb={scanDarkWeb} setActiveScreen={setActiveScreen} />}
+              {activeScreen === 'alerts' && <Alerts key="alerts" alerts={alerts} profile={profile} setActiveScreen={setActiveScreen} />}
+              {activeScreen === 'clock' && <WorldClock key="clock" />}
+              {activeScreen === 'ai' && <AIAssistant key="ai" askAI={askAI} logActivity={logActivity} profile={profile} setActiveScreen={setActiveScreen} alerts={alerts} activityLogs={activityLogs} />}
+              {activeScreen === 'features' && <KeyFeatures key="features" setActiveScreen={setActiveScreen} />}
+              {activeScreen === 'guide' && <UserGuide key="guide" setActiveScreen={setActiveScreen} />}
+              {activeScreen === 'tasks' && <TaskManagement key="tasks" profile={profile} user={user} />}
+              {activeScreen === 'pricing' && <PricingScreen key="pricing" profile={profile} upgrade={upgradeSubscription} redeemActivationCode={redeemActivationCode} />}
+              {activeScreen === 'admin' && <AdminQueue key="admin" generateActivationCode={generateActivationCode} />}
+              {activeScreen === 'settings' && (
+                <SettingsScreen 
+                  key="settings" 
+                  profile={profile} 
+                  logout={logout} 
+                  updateUserPreferences={updateUserPreferences}
+                  changePassword={changePassword}
+                  isDarkMode={isDarkMode} 
+                  setIsDarkMode={setIsDarkMode}
+                  generate2FA={generate2FASecret}
+                  verify2FA={verify2FACode}
+                  enable2FA={enable2FA}
+                  disable2FA={disable2FA}
+                  updateLogRetention={updateLogRetention}
+                  clearOldLogs={clearOldLogs}
+                  logActivity={logActivity}
+                  setActiveScreen={setActiveScreen}
+                  toggleAutoMonitoring={toggleAutoMonitoring}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
+
+      {/* Right Panel - Shown on desktop */}
+      <aside className="hidden xl:flex w-72 bg-surface border-l border-border p-8 flex-col shrink-0 overflow-y-auto">
+        <div className="space-y-8">
+          <section>
+            <div className="text-[10px] text-text-dim uppercase tracking-widest mb-4">Recent Alerts</div>
+            <div className="space-y-3">
+              {alerts.slice(0, 2).map((a: any) => (
+                <div key={a.id} className={cn("alert-item", a.severity === 'critical' && "alert-item-critical")}>
+                  <div className="font-bold text-xs">{a.title}</div>
+                  <div className="text-[11px] text-text-dim mt-1">{a.message}</div>
+                </div>
+              ))}
+              {alerts.length === 0 && (
+                <div className="text-[11px] text-text-dim italic">No recent alerts</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-[10px] text-text-dim uppercase tracking-widest mb-4">AI Advisor</div>
+            <div className="text-[11px] text-text-dim mb-2 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-success rounded-full" />
+              CyberAmour AI • Active
+            </div>
+            <div className="ai-bubble group relative">
+              <div className="mb-3 italic">"{aiAdvice.text}"</div>
+              {aiAdvice.actionLabel && (
+                <button 
+                  onClick={() => setActiveScreen(aiAdvice.targetScreen)}
+                  className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold rounded-lg border border-primary/20 transition-all flex items-center justify-center gap-2"
+                >
+                  {aiAdvice.actionLabel}
+                  <ArrowRight size={12} />
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="mt-auto">
+            <div className="text-[10px] text-text-dim uppercase tracking-widest mb-4">Phone Optimizer</div>
+            <div className="glass-card p-4 space-y-3">
+              <div className="flex justify-between text-[11px]">
+                <span>Storage Junk</span>
+                <span className="text-accent">1.2 GB</span>
+              </div>
+              <div className="w-full h-1 bg-bg rounded-full overflow-hidden">
+                <div className="h-full bg-primary w-[70%]" />
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      {/* Mobile Nav */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-xl border-t border-border px-6 py-3 flex justify-between items-center z-50">
+        <NavButton active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={20} />} label="Home" />
+        <NavButton active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={20} />} label="Forensics" />
+        <NavButton active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={20} />} label="Risk" />
+        <NavButton active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={20} />} label="AI" />
+        <NavButton active={activeScreen === 'features'} onClick={() => setActiveScreen('features')} icon={<Star size={20} className="text-accent"/>} label="Features" />
+        <NavButton active={activeScreen === 'tasks'} onClick={() => setActiveScreen('tasks')} icon={<CheckSquare size={20} />} label="Tasks" />
+        <NavButton active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={20} />} label="Menu" />
+      </nav>
+
+      <AnimatePresence>
+        {showTutorial && (
+          <TutorialSystem 
+            onComplete={() => {
+              setShowTutorial(false);
+              localStorage.setItem(`tutorial_seen_${user?.uid}`, 'true');
+            }} 
+          />
+        )}
+        {showLinkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-md">
+            <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><LinkIcon size={18} className="text-primary"/> Link to {showLinkModal.targetName}</h3>
+              <p className="text-sm text-text-dim mb-4">Select the relationship type:</p>
+              
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const type = formData.get('linkType') as string;
+                if (type) handleConfirmLink(type);
+              }}>
+                <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto mb-4">
+                  {["Execution", "Persistence", "Traffic", "Modification", "Association"].map(t => (
+                    <label key={t} className="flex items-center gap-3 p-3 bg-bg/50 border border-border rounded-lg cursor-pointer hover:bg-surface/50 transition-colors">
+                      <input type="radio" name="linkType" value={t} className="w-4 h-4 text-primary bg-bg border-border focus:ring-primary focus:ring-2" required defaultChecked={t === "Association"} />
+                      <span className="text-sm font-medium text-text-main">{t}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2 w-full mt-4">
+                  <button type="button" onClick={() => setShowLinkModal(null)} className="flex-1 px-4 py-2 text-sm text-text-dim hover:text-white bg-surface hover:bg-border/50 rounded-lg transition-colors">Cancel</button>
+                  <button type="submit" className="flex-1 px-4 py-2 text-sm text-bg bg-primary font-bold hover:bg-primary/90 rounded-lg transition-colors">Confirm Link</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function TutorialSystem({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState(0);
+  
+  const steps = [
+    {
+      title: "Welcome to CyberAmour",
+      description: "Let's take a quick tour of your new digital fortress. We'll show you how to leverage AI and advanced monitoring to stay protected.",
+      icon: <CyberAmourLogo size={144} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
+    },
+    {
+      title: "AI Security Assistant",
+      description: "Meet your 24/7 security expert. Ask anything from 'Is this email safe?' to 'How do I secure my router?'. It also provides proactive advice on your dashboard.",
+      icon: <MessageSquare size={48} className="text-accent" />
+    },
+    {
+      title: "Key Features",
+      description: "Explore the advanced capabilities of the CyberAmour platform, from Password Leak Detection to AI-powered Phishing Detection.",
+      icon: <Star size={48} className="text-success" />
+    },
+    {
+      title: "Network & Device Shield",
+      description: "Monitor real-time packet data and scan for malware. Our AI auto-blocks session hijacking and suspicious network behavior.",
+      icon: <Network size={48} className="text-primary" />
+    }
+  ];
+
+  const currentStep = steps[step];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] bg-bg/80 backdrop-blur-md flex items-center justify-center p-6"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        className="glass-card max-w-md w-full p-8 text-center space-y-6 relative overflow-hidden"
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
+          <motion.div 
+            className="h-full bg-primary"
+            initial={{ width: "0%" }}
+            animate={{ width: `${((step + 1) / steps.length) * 100}%` }}
+          />
+        </div>
+
+        <div className="flex justify-center py-4">
+          <div className="p-6 bg-surface rounded-full border border-border shadow-xl">
+            {currentStep.icon}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-2xl font-bold">{currentStep.title}</h3>
+          <p className="text-text-dim text-sm leading-relaxed">
+            {currentStep.description}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between pt-4">
+          <button 
+            onClick={onComplete}
+            className="text-xs text-text-dim hover:text-text-main transition-colors"
+          >
+            Skip Tutorial
+          </button>
+          <button 
+            onClick={() => {
+              if (step < steps.length - 1) {
+                setStep(step + 1);
+              } else {
+                onComplete();
+              }
+            }}
+            className="px-6 py-2 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2"
+          >
+            {step === steps.length - 1 ? "Get Started" : "Next"}
+            <ArrowRight size={16} />
+          </button>
+        </div>
+
+        <div className="flex justify-center gap-1.5">
+          {steps.map((_, i) => (
+            <div 
+              key={i} 
+              className={cn(
+                "w-1.5 h-1.5 rounded-full transition-all",
+                i === step ? "bg-primary w-4" : "bg-white/10"
+              )} 
+            />
+          ))}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function SidebarItem({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <li 
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all text-sm font-medium",
+        active ? "bg-card-bg text-text-main border border-border shadow-sm" : "text-text-dim hover:text-text-main hover:bg-white/5"
+      )}
+    >
+      <span className={cn("transition-opacity", active ? "opacity-100" : "opacity-60")}>{icon}</span>
+      {label}
+    </li>
+  );
+}
+
+function NavButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-1 transition-all duration-300 px-3 py-1 rounded-xl relative",
+        active ? "text-primary scale-110" : "text-text-dim hover:text-text-main"
+      )}
+    >
+      {icon}
+      <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+      {active && <motion.div layoutId="nav-glow" className="absolute -bottom-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_#8B5CF6]" />}
+    </button>
+  );
+}
+
+function ComplianceInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-md"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="bg-surface border border-border rounded-3xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto cyber-scrollbar shadow-2xl shadow-primary/20"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold flex items-center gap-3">
+            <FileText className="text-accent" size={24} />
+            Compliance Framework Definitions
+          </h3>
+          <button onClick={onClose} className="p-2 text-text-dim hover:text-white transition-colors rounded-full hover:bg-white/5">
+            <XCircle size={20} />
+          </button>
+        </div>
+        
+        <div className="space-y-6 text-sm text-text-main/90 leading-relaxed">
+          <section className="space-y-3">
+            <h4 className="text-lg font-bold text-white border-b border-white/10 pb-2">ISO 27001</h4>
+            <p><strong>ISO/IEC 27001</strong> is an international standard for managing information security. It details requirements for establishing, implementing, maintaining, and continually improving an Information Security Management System (ISMS).</p>
+            <ul className="list-disc pl-5 space-y-1 text-text-dim">
+              <li>Requires a systematic approach to managing sensitive company information.</li>
+              <li>Includes people, processes, and IT systems by applying a risk management process.</li>
+              <li>Often targeted by threat actors aiming to breach organizational data silos.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h4 className="text-lg font-bold text-white border-b border-white/10 pb-2">NIST Cybersecurity Framework</h4>
+            <p>The <strong>NIST Cybersecurity Framework (CSF)</strong> provides a policy framework of computer security guidance for how private sector organizations in the United States can assess and improve their ability to prevent, detect, and respond to cyber attacks.</p>
+            <ul className="list-disc pl-5 space-y-1 text-text-dim">
+              <li>Structured around five core functions: Identify, Protect, Detect, Respond, and Recover.</li>
+              <li>Provides a common language for understanding, managing, and expressing cybersecurity risk.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h4 className="text-lg font-bold text-white border-b border-white/10 pb-2">GDPR (General Data Protection Regulation)</h4>
+            <p><strong>GDPR</strong> is a regulation in EU law on data protection and privacy in the European Union and the European Economic Area. It also addresses the transfer of personal data outside the EU and EEA areas.</p>
+            <ul className="list-disc pl-5 space-y-1 text-text-dim">
+              <li>Enhances individuals' control and rights over their personal data.</li>
+              <li>Imposes strict rules on data controllers and processors.</li>
+              <li>Heavy penalties for non-compliance, particularly data leaks exposing PII (Personally Identifiable Information).</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h4 className="text-lg font-bold text-[#F59E0B] border-b border-[#F59E0B]/20 pb-2">How This App Uses Compliance Risk</h4>
+            <p className="text-text-dim">The pie chart illustrates the current vulnerability landscape grouped by potential regulatory violations. It measures detected anomalies, structural weaknesses, and active threats against these major standards to highlight immediate compliance exposure.</p>
+          </section>
+        </div>
+
+        <div className="mt-8 pt-4 border-t border-border flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-surface border border-border hover:bg-white/5 rounded-xl transition-colors font-bold text-sm">
+            Close
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
+  const [input, setInput] = useState('');
+  const [scanType, setScanType] = useState<'url' | 'file'>('url');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const { isValidFormat, formatError } = React.useMemo(() => {
+    if (!input) return { isValidFormat: true, formatError: '' };
+    if (scanType === 'url') {
+      const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(:[0-9]{1,5})?(\/.*)?$/;
+      const valid = urlPattern.test(input.trim());
+      return { isValidFormat: valid, formatError: valid ? '' : 'Invalid URL format' };
+    }
+    return { isValidFormat: true, formatError: '' };
+  }, [input, scanType]);
+
+  const handleScan = async () => {
+    if (scanType === 'url' && !isValidFormat) return;
+    if (scanType === 'file' && !imageFile) return;
+    
+    setScanning(true);
+    setResult(null);
+    setErrorMsg(null);
+    try {
+      let res;
+      if (scanType === 'file' && imageFile) {
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(imageFile);
+        });
+        const fileData = { mimeType: imageFile.type || 'application/octet-stream', data: base64Data, name: imageFile.name };
+        res = await performScan('file', imageFile.name, fileData);
+      } else {
+        res = await performScan('url', input);
+      }
+      setResult(res);
+    } catch (e: any) {
+      if (e.message === 'LIMIT_REACHED') {
+        setErrorMsg("You've used your 5 free Cyber Forensics scans. Upgrade to a subscription-based membership to access premium features.");
+      }
+      console.error(e);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-6 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#10B981]/20 p-2 rounded-xl border border-[#10B981]/30">
+            {scanType === 'url' ? <LinkIcon size={18} className="text-[#10B981]" /> : <FileText size={18} className="text-[#10B981]" />}
+          </div>
+          <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Quick Threat Scanner</h4>
+        </div>
+        <div className="flex bg-surface/50 border border-border rounded-lg p-1">
+          <button onClick={() => { setScanType('url'); setInput(''); setResult(null); setImageFile(null); }} className={cn("px-3 py-1 text-xs font-bold rounded flex items-center gap-1", scanType === 'url' ? "bg-primary text-white" : "text-text-dim hover:text-white")}><LinkIcon size={12}/> URL</button>
+          <button onClick={() => { setScanType('file'); setInput(''); setResult(null); setImageFile(null); }} className={cn("px-3 py-1 text-xs font-bold rounded flex items-center gap-1", scanType === 'file' ? "bg-primary text-white" : "text-text-dim hover:text-white")}><FileText size={12}/> File</button>
+        </div>
+      </div>
+      
+      {scanType === 'url' ? (
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <input 
+              type="text" 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+              placeholder="Paste URL to scan for phishing & malware..."
+              className={cn("w-full bg-surface/50 border rounded-xl py-3 pl-4 pr-10 text-sm focus:outline-none transition-colors", input ? (isValidFormat ? "border-success focus:border-success text-success" : "border-danger focus:border-danger text-danger") : "border-border focus:border-[#10B981]")}
+            />
+            {input && (
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                {isValidFormat ? <CheckCircle2 size={16} className="text-success" /> : <AlertTriangle size={16} className="text-danger" />}
+              </div>
+            )}
+            {!isValidFormat && input && (
+              <p className="text-xs text-danger mt-1 absolute -bottom-5">{formatError}</p>
+            )}
+          </div>
+          <button 
+            onClick={handleScan}
+            disabled={scanning || !input || !isValidFormat}
+            className="px-6 py-3 bg-gradient-to-r from-[#10B981] to-[#34D399] disabled:opacity-50 text-bg font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105 shrink-0"
+          >
+            {scanning ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><Scan size={18} /></motion.div> : <Scan size={18} />}
+            {scanning ? "Scanning..." : "Scan URL"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col md:flex-row gap-4 items-center">
+          <div onClick={() => fileInputRef.current?.click()} className="flex-1 w-full bg-surface/30 border border-dashed border-[#10B981]/50 hover:bg-[#10B981]/5 hover:border-[#10B981] cursor-pointer rounded-xl py-3 px-4 flex justify-between items-center transition-colors">
+            <span className={cn("text-sm truncate mr-4", imageFile ? "text-[#10B981] font-bold" : "text-text-dim")}>{imageFile ? imageFile.name : 'Click to select a file...'}</span>
+            <FileText size={18} className="text-[#10B981] shrink-0" />
+            <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setImageFile(f); }} />
+          </div>
+          <button 
+            onClick={handleScan}
+            disabled={scanning || !imageFile}
+            className="px-6 py-3 w-full md:w-auto bg-gradient-to-r from-[#10B981] to-[#34D399] disabled:opacity-50 text-bg font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105 shrink-0"
+          >
+            {scanning ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><Scan size={18} /></motion.div> : <Scan size={18} />}
+            {scanning ? "Scanning..." : "Scan File"}
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
+          >
+            <div>{errorMsg}</div>
+            {setActiveScreen && (
+              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
+            )}
+          </motion.div>
+        )}
+        {result && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 p-4 rounded-xl border border-border bg-surface overflow-hidden"
+          >
+            <div className="flex items-center gap-3 mb-4">
+               <div className={cn("p-2 rounded-lg", result.verdict === 'Safe' ? "bg-success/20 text-success" : result.verdict === 'Suspicious' ? "bg-accent/20 text-accent" : "bg-danger/20 text-danger")}>
+                  {result.verdict === 'Safe' ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
+               </div>
+               <div>
+                  <div className="text-sm font-bold">{result.verdict}</div>
+                  <div className="text-xs text-text-dim capitalize">URL Analysis</div>
+               </div>
+               <div className="ml-auto flex items-center gap-2">
+                 <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Risk Score</div>
+                 <div className={cn("text-xl font-bold", result.riskScore >= 70 ? 'text-danger' : result.riskScore >= 40 ? 'text-accent' : 'text-success')}>
+                   {result.riskScore}/100
+                 </div>
+               </div>
+            </div>
+            
+            <p className="text-sm text-text-main mb-4">{result.analysis}</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+              {(result.domainReputation) && (
+                <div className="p-3 bg-white/5 rounded-lg border border-border">
+                  <div className="text-[10px] text-text-dim uppercase font-bold mb-1">Domain Reputation</div>
+                  <div>{result.domainReputation}</div>
+                </div>
+              )}
+              {(result.sslStatus) && (
+                <div className="p-3 bg-white/5 rounded-lg border border-border">
+                  <div className="text-[10px] text-text-dim uppercase font-bold mb-1">SSL Status</div>
+                  <div>{result.sslStatus}</div>
+                </div>
+              )}
+              {(result.redirectionPatterns) && (
+                <div className="p-3 bg-white/5 rounded-lg border border-border">
+                  <div className="text-[10px] text-text-dim uppercase font-bold mb-1">Redirection</div>
+                  <div>{result.redirectionPatterns}</div>
+                </div>
+              )}
+            </div>
+
+            {result.redFlags && result.redFlags.length > 0 && (
+              <div className="space-y-3">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-danger flex items-center gap-2"><AlertTriangle size={14} /> Security Indicators</h5>
+                {result.redFlags.map((flag: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-danger/10 border border-danger/20 text-danger rounded-lg text-sm">
+                    <strong>{flag.indicator}</strong>
+                    <div className="text-xs mt-1 opacity-80">{flag.advice}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {askAI && <AIInsightBox data={result} contextKey={`quick-url-${input}`} askAI={askAI} />}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ScanTimeline({ result, scanType }: any) {
+  // Generate a mock timeline based on the result
+  const events = [];
+  events.push({ time: "00:00", text: `Initialized ${scanType} analysis engine.` });
+  events.push({ time: "00:02", text: `Connected to global threat intelligence databases.` });
+  
+  if (result.type === 'breach' && result.found?.length > 0) {
+    events.push({ time: "00:05", text: `Scanning dark web repositories for credentials.` });
+    events.push({ time: "00:08", text: `Match found in known data breaches.` });
+  } else if (result.verdict === 'Safe' || result.verdict === 'Clean') {
+    events.push({ time: "00:06", text: `Cross-referencing signatures and behavioral patterns.` });
+    events.push({ time: "00:10", text: `No malicious indicators detected.` });
+  } else {
+    events.push({ time: "00:05", text: `Analyzing structure and extracting metadata.` });
+    if (result.redFlags && result.redFlags.length > 0) {
+      events.push({ time: "00:07", text: `Flagged suspicious configurations: ${result.redFlags.length} indicator(s).` });
+    }
+    events.push({ time: "00:11", text: `Threat assessment concluded with risk score: ${result.riskScore}.` });
+  }
+  
+  return (
+    <div className="mt-6 border-t border-border pt-4">
+      <h5 className="text-xs font-bold uppercase tracking-wider text-text-dim mb-4 flex items-center gap-2">
+        <Clock size={14} /> Scan Execution Timeline
+      </h5>
+      <div className="space-y-4 relative before:absolute before:inset-0 before:left-[11px] before:-translate-x-px before:h-full before:w-0.5 before:bg-border/50">
+        {events.map((evt, idx) => (
+          <div key={idx} className="relative flex items-start gap-4 text-sm z-10">
+            <div className="w-6 h-6 rounded-full bg-surface border-2 border-border flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] text-primary font-bold uppercase tracking-widest">{evt.time}</span>
+              <span className="text-text-main text-xs">{evt.text}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RealtimeAlerts({ alerts }: { alerts: any[] }) {
+  const [visibleAlerts, setVisibleAlerts] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Show unread alerts that were created within the last 15 seconds
+    const now = new Date().getTime();
+    const recentUnread = alerts.filter(a => {
+      if (a.isRead) return false;
+      const createdAtTime = new Date(a.createdAt).getTime();
+      return now - createdAtTime < 15000;
+    });
+    setVisibleAlerts(recentUnread);
+  }, [alerts]);
+
+  return (
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <AnimatePresence>
+        {visibleAlerts.slice(0, 3).map(alert => (
+          <motion.div
+            key={alert.id}
+            initial={{ opacity: 0, x: 50, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20, scale: 0.9 }}
+            className={cn(
+              "pointer-events-auto p-4 rounded-xl border shadow-2xl backdrop-blur-md w-80",
+              alert.severity === 'critical' || alert.severity === 'high' ? "bg-danger/20 border-danger shadow-danger/20" :
+              alert.severity === 'medium' ? "bg-accent/20 border-accent shadow-accent/20" :
+              "bg-primary/20 border-primary shadow-primary/20"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "p-2 rounded-full mt-0.5",
+                alert.severity === 'critical' || alert.severity === 'high' ? "bg-danger/20 text-danger" :
+                alert.severity === 'medium' ? "bg-accent/20 text-accent" :
+                "bg-primary/20 text-primary"
+              )}>
+                 <ShieldAlert size={16} />
+              </div>
+              <div>
+                 <h4 className="text-sm font-bold capitalize text-white">{alert.title}</h4>
+                 <p className="text-xs text-text-dim mt-1">{alert.message}</p>
+                 <div className="text-[9px] uppercase tracking-widest mt-2 opacity-50 font-bold">{alert.severity} Risk Alert</div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
+  const [searchInput, setSearchInput] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [result, setResult] = useState<any>(null);
+  const [draftResult, setDraftResult] = useState<any>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [useCyberAmour, setUseCyberAmour] = useState(false);
+
+  const handleScan = async () => {
+    if (!searchInput) return;
+    setScanning(true);
+    setResult(null);
+    setErrorMsg(null);
+    setScanProgress(0);
+    
+    const progressInterval = setInterval(() => {
+      setScanProgress(prev => Math.min(prev + (Math.random() * 12 + 3), 98));
+    }, 150);
+
+    let typeToScan: any = 'name';
+    const trimmed = searchInput.trim();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      typeToScan = 'email';
+    } else if (/^\+?[0-9\s\-\(\)]+$/.test(trimmed) && trimmed.replace(/[^0-9]/g, '').length >= 7) {
+      typeToScan = 'phone';
+    } else if (trimmed.toLowerCase().includes('ltd') || trimmed.toLowerCase().includes('inc') || trimmed.toLowerCase().includes('llc') || trimmed.toLowerCase().includes('company')) {
+      typeToScan = 'company';
+    }
+
+    const payload = useCyberAmour 
+      ? `${trimmed} [Simulate CyberAmour Free Repositories to access publicly available information and extract transform data. Analyze and interpret these results to establish relationships between entities. Reflect these relationships extensively in Associated Companies and Digital Inconsistencies.]`
+      : trimmed;
+
+    try {
+      const res = await performScan(typeToScan, payload);
+      setDraftResult(res);
+    } catch (e: any) {
+      if (e.message === 'LIMIT_REACHED') {
+        if (typeToScan === 'phone') {
+          setErrorMsg("You've used your 3 free Phone Scans. Upgrade to a subscription-based membership to access premium features.");
+        } else {
+          setErrorMsg("You've used your 5 free Cyber Forensics scans. Upgrade to a subscription-based membership to access premium features.");
+        }
+      }
+      console.error(e);
+    } finally {
+      clearInterval(progressInterval);
+      setScanProgress(100);
+      setTimeout(() => setScanning(false), 500);
+    }
+  };
+
+  return (
+    <div className="glass-card p-6 space-y-4 relative overflow-hidden">
+      {scanning && (
+        <div className="absolute top-0 left-0 h-1 bg-[#3B82F6]/20 w-full z-0">
+          <motion.div 
+            className="h-full bg-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+            initial={{ width: "0%" }}
+            animate={{ width: `${scanProgress}%` }}
+            transition={{ ease: "linear" }}
+          />
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3 mb-2 relative z-10">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#3B82F6]/20 p-2 rounded-xl border border-[#3B82F6]/30">
+            <Globe size={18} className="text-[#3B82F6]" />
+          </div>
+          <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Global Phone & Identity Lookup</h4>
+        </div>
+        {scanning && <span className="text-xs font-bold text-[#3B82F6]">{Math.round(scanProgress)}%</span>}
+      </div>
+      <div className="flex flex-col md:flex-row gap-4 relative z-10">
+        <div className="flex-1 flex gap-2">
+          <input 
+            type="text" 
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+            placeholder="Enter name, phone, email, or company to reveal identity & contacts..."
+            className="flex-1 bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-[#3B82F6] transition-colors"
+          />
+          {searchInput && (
+            <button
+              onClick={() => {
+                setSearchInput('');
+                setResult(null);
+                setDraftResult(null);
+                setErrorMsg(null);
+              }}
+              className="px-4 py-3 bg-surface/50 border border-border rounded-xl hover:bg-surface/80 transition-colors flex items-center justify-center text-text-dim hover:text-white"
+              title="Clear Search"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        <button 
+          onClick={handleScan}
+          disabled={scanning || !searchInput}
+          className="px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] disabled:opacity-50 text-bg font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105"
+        >
+          {scanning ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><Scan size={18} /></motion.div> : <Search size={18} />}
+          {scanning ? "Searching..." : "Search"}
+        </button>
+      </div>
+      
+      <div className="flex flex-col gap-3 relative z-10 pl-1 mt-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setUseCyberAmour(!useCyberAmour)}
+            className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2 focus:ring-offset-bg"
+            role="switch"
+            aria-checked={useCyberAmour}
+          >
+            <span className="sr-only">Simulate using CyberAmour free repositories</span>
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none absolute h-full w-full rounded-md ${useCyberAmour ? 'bg-[#3B82F6]' : 'bg-surface border border-border'} transition-colors mx-auto`}
+            />
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none absolute left-0 inline-block h-5 w-5 transform rounded-full border border-border bg-white shadow ring-0 transition-transform ${useCyberAmour ? 'translate-x-4' : 'translate-x-0'}`}
+            />
+          </button>
+          <span className="text-xs text-text-dim">Simulate CyberAmour Repositories</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+           <div className="bg-[#3B82F6]/20 p-1 rounded border border-[#3B82F6]/30">
+               <svg className="w-3 h-3 text-[#3B82F6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+           </div>
+           <span className="text-xs text-text-dim">Global Phone Lookup utilizes True Caller Network & Public Directories.</span>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
+          >
+            <div>{errorMsg}</div>
+            {setActiveScreen && (
+              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
+            )}
+          </motion.div>
+        )}
+        {draftResult && !scanning && !result && (
+          <ScanDraftViewer 
+            draftResult={draftResult} 
+            setDraftResult={setDraftResult} 
+            askAI={askAI} 
+            onFinalize={() => {
+               setResult(draftResult);
+               setDraftResult(null);
+            }} 
+          />
+        )}
+        {result && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 p-4 rounded-xl border border-border bg-surface overflow-hidden"
+          >
+            <div className="flex items-center gap-3 mb-4">
+               <div className={cn("p-2 rounded-lg", result.verdict === 'Safe' ? "bg-success/20 text-success" : result.verdict === 'Suspicious' ? "bg-accent/20 text-accent" : "bg-danger/20 text-danger")}>
+                  {result.verdict === 'Safe' ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
+               </div>
+               <div>
+                  <div className="text-sm font-bold">{result.verdict}</div>
+                  <div className="text-xs text-text-dim capitalize">{searchInput.includes('@') ? 'Email Analysis' : searchInput.match(/^[0-9\+\-\(\)\s]+$/) ? 'Phone Number Analysis (True Caller Network)' : 'Identity Analysis'}</div>
+               </div>
+               <div className="ml-auto flex items-center gap-2">
+                 <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Risk Score</div>
+                 <div className={cn("text-xl font-bold", result.riskScore >= 70 ? 'text-danger' : result.riskScore >= 40 ? 'text-accent' : 'text-success')}>
+                   {result.riskScore}/100
+                 </div>
+               </div>
+            </div>
+            
+            <p className="text-sm text-text-main mb-4">{result.analysis}</p>
+            
+            {(result.scamReports || result.maliciousAssociations || result.carrier || result.lineType) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+                {(result.carrier) && (
+                  <div className="p-3 bg-surface border border-border rounded-lg">
+                    <div className="text-[10px] uppercase font-bold text-text-dim mb-1">Carrier</div>
+                    <div>{result.carrier}</div>
+                  </div>
+                )}
+                {(result.lineType) && (
+                  <div className="p-3 bg-surface border border-border rounded-lg">
+                    <div className="text-[10px] uppercase font-bold text-text-dim mb-1">Line Type</div>
+                    <div>{result.lineType}</div>
+                  </div>
+                )}
+                {(result.scamReports) && (
+                  <div className="p-3 bg-danger/10 text-danger rounded-lg border border-danger/20">
+                    <div className="text-[10px] uppercase font-bold mb-1">Scam Reports</div>
+                    <div>{result.scamReports}</div>
+                  </div>
+                )}
+                {(result.maliciousAssociations) && (
+                  <div className="p-3 bg-danger/10 text-danger rounded-lg border border-danger/20">
+                    <div className="text-[10px] uppercase font-bold mb-1">Malicious Associations</div>
+                    <div>{result.maliciousAssociations}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {result.candidates && result.candidates.length > 0 && (
+              <div className="space-y-3 mt-4">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] flex items-center gap-2"><UserIcon size={14} /> Identified Owner</h5>
+                {result.candidates.map((candidate: any, idx: number) => (
+                  <div key={idx} className="p-4 bg-white/5 border border-border rounded-xl space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-start gap-4">
+                        {candidate.photoUrl && (
+                          <img src={candidate.photoUrl} alt={candidate.name} className="w-16 h-16 rounded-full object-cover border-2 border-[#3B82F6]" referrerPolicy="no-referrer" />
+                        )}
+                        <div>
+                          <div className="font-bold text-lg text-white">{candidate.name}</div>
+                          {(candidate.fullName || candidate.alias) && (
+                            <div className="text-xs text-text-main mt-1 font-medium">
+                              {[candidate.fullName ? `Full Name: ${candidate.fullName}` : null, candidate.alias ? `Alias: ${candidate.alias}` : null].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                          {(candidate.location || candidate.age || candidate.profession || candidate.dateOfBirth || candidate.sex) && (
+                            <div className="text-xs text-text-dim mt-1">
+                              {[candidate.dateOfBirth ? `DOB: ${candidate.dateOfBirth}` : null, candidate.age ? `${candidate.age} yrs` : null, candidate.sex, candidate.profession, candidate.location].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                          {(candidate.maritalStatus || candidate.relationshipStatus) && (
+                            <div className="text-xs text-text-dim mt-1">
+                              {[candidate.maritalStatus ? `Marital Status: ${candidate.maritalStatus}` : null, candidate.relationshipStatus ? `Relationship: ${candidate.relationshipStatus}` : null].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                          {((candidate.emails && candidate.emails.length > 0) || (candidate.phoneNumbers && candidate.phoneNumbers.length > 0)) && (
+                            <div className="text-xs text-[rgb(59,130,246)] font-medium mt-1">
+                              {[candidate.emails?.length > 0 ? `Emails: ${candidate.emails.join(', ')}` : null, candidate.phoneNumbers?.length > 0 ? `Phone: ${candidate.phoneNumbers.join(', ')}` : null].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2 space-y-2">
+                       {candidate.publicSpacesLinked && candidate.publicSpacesLinked.length > 0 && (
+                         <ExpandableSection title="Public Spaces Linked" color="#F59E0B">
+                           <ul className="text-sm text-[#94A3B8] list-disc pl-4">
+                             {candidate.publicSpacesLinked.map((space: string, i: number) => (
+                               <li key={i}>{space}</li>
+                             ))}
+                           </ul>
+                         </ExpandableSection>
+                       )}
+                       {candidate.characterAssessment && (
+                         <ExpandableSection title="Character & Integrity Assessment" color="#3B82F6" icon={<GraduationCap size={14}/>}>
+                           <p className="text-xs text-[#3B82F6]/90">{candidate.characterAssessment}</p>
+                         </ExpandableSection>
+                       )}
+                       
+                        {candidate.description && (
+                          <ExpandableSection title="Description / Summary" color="#94A3B8">
+                            <p className="text-sm text-[#94A3B8]">{candidate.description}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.history && (
+                          <ExpandableSection title="History & Background" color="#3B82F6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.history}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.workHistory && (
+                          <ExpandableSection title="Work History" color="#3B82F6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.workHistory}</p>
+                          </ExpandableSection>
+                        )}
+
+                       {candidate.criminalRecords && (
+                         <ExpandableSection title="Criminal & Fraud Records" color="#EF4444">
+                           <p className="text-xs text-[#EF4444]/90">{candidate.criminalRecords}</p>
+                         </ExpandableSection>
+                       )}
+                       
+                        {candidate.moralFidelity && (
+                          <ExpandableSection title="Moral Fidelity" color="#F59E0B">
+                            <p className="text-sm text-[#94A3B8]">{candidate.moralFidelity}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.sexTapeLeakages && (
+                          <ExpandableSection title="Sex Tape Leakages" color="#EF4444" defaultOpen={true}>
+                            <p className="text-sm text-[#94A3B8]">{candidate.sexTapeLeakages}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.sexualScandals && (
+                          <ExpandableSection title="Known Scandals" color="#EF4444" defaultOpen={true}>
+                            <p className="text-sm text-[#94A3B8]">{candidate.sexualScandals}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.relationshipHistory && (
+                          <ExpandableSection title="Relationship History" color="#8B5CF6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.relationshipHistory}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.previousMarriages && (
+                          <ExpandableSection title="Previous Marriages" color="#8B5CF6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.previousMarriages}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.creditWorthiness && (
+                          <ExpandableSection title="Business & Credit Worthiness" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.creditWorthiness}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.financialCredibilityForLoans && (
+                          <ExpandableSection title="Financial Credibility for Loans" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.financialCredibilityForLoans}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.characterCredibilityForBusiness && (
+                          <ExpandableSection title="Character Credibility for Business" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.characterCredibilityForBusiness}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {(candidate.socialMediaProfiles && candidate.socialMediaProfiles.length > 0) ? (
+                          <ExpandableSection title="Publicly Available Social Media Profiles" color="#10B981" defaultOpen={true}>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {candidate.socialMediaProfiles.map((profile: any, idx: number) => (
+                                <div key={idx} className="p-3 bg-[#10B981]/5 border border-[#10B981]/20 rounded-lg flex flex-col gap-2">
+                                  <a href={profile.url.startsWith('http') ? profile.url : `https://${profile.url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[#10B981] font-medium hover:underline">
+                                    {profile.platform} <span className="text-xs ml-auto">External &nearr;</span>
+                                  </a>
+                                  {(profile.source || profile.date || profile.reliabilityLevel) && (
+                                    <div className="flex flex-wrap gap-2 text-[10px] text-text-dim">
+                                      {profile.reliabilityLevel && <span className={cn("px-1 rounded font-bold", profile.reliabilityLevel === 'High' ? "text-success" : profile.reliabilityLevel === 'Medium' ? "text-[#F59E0B]" : "text-danger")}>{profile.reliabilityLevel}</span>}
+                                      {profile.date && <span>• {profile.date}</span>}
+                                      {profile.source && <span className="truncate max-w-[120px]">• {profile.source.replace(/^https?:\/\//, '')}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        ) : null}
+
+                        {(candidate.associatedCompanies && candidate.associatedCompanies.length > 0) && (
+                          <ExpandableSection title="Associated Companies" color="#F59E0B" icon={<Briefcase size={14} />} defaultOpen={true}>
+                            <div className="space-y-2">
+                              {candidate.associatedCompanies.map((company: any, idx: number) => (
+                                <div key={idx} className="bg-surface/50 p-3 rounded-lg border border-border">
+                                  <div className="text-sm font-bold text-white mb-1">{company.name}</div>
+                                  <div className="text-xs text-[#F59E0B] mb-2">{company.relationship}</div>
+                                  {company.finding && <p className="text-xs text-text-main mb-2">{company.finding}</p>}
+                                  {(company.source || company.date || company.reliabilityLevel) && (
+                                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-dim border-t border-border/50 pt-2">
+                                      {company.reliabilityLevel && <span className={cn("px-1.5 py-0.5 border rounded uppercase", company.reliabilityLevel === 'High' ? "border-success/30 text-success" : company.reliabilityLevel === 'Medium' ? "border-[#F59E0B]/30 text-[#F59E0B]" : "border-danger/30 text-danger")}>{company.reliabilityLevel} Confidence</span>}
+                                      {company.date && <span>{company.date}</span>}
+                                      {company.source && <span className="truncate max-w-[150px]">{company.source.startsWith('http') ? <a href={company.source} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary">{company.source.replace(/^https?:\/\//, '')}</a> : company.source}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        )}
+
+                       {candidate.digitalInconsistencies && candidate.digitalInconsistencies.length > 0 && (
+                         <ExpandableSection title="Digital Presence Inconsistencies" color="#F59E0B">
+                           <div className="space-y-3">
+                             {candidate.digitalInconsistencies.map((inc: any, i: number) => (
+                               <div key={i} className="text-xs bg-surface/50 border border-[#F59E0B]/20 p-3 rounded-lg space-y-1">
+                                 <p className="text-[#F59E0B]/90 font-medium">{inc.description || inc}</p>
+                                 {(inc.source || inc.date || inc.reliabilityLevel) && (
+                                   <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-text-dim border-t border-border/50 pt-2">
+                                     {inc.reliabilityLevel && <span className={cn("px-1.5 py-0.5 rounded font-bold", inc.reliabilityLevel === 'High' ? "bg-success/10 text-success" : inc.reliabilityLevel === 'Medium' ? "bg-[#F59E0B]/10 text-[#F59E0B]" : "bg-danger/10 text-danger")}>{inc.reliabilityLevel} Reliability</span>}
+                                     {inc.date && <span>• Date: {inc.date}</span>}
+                                     {inc.source && <span className="truncate max-w-[200px]">• Source: {inc.source}</span>}
+                                   </div>
+                                 )}
+                               </div>
+                             ))}
+                           </div>
+                         </ExpandableSection>
+                       )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {askAI && <AIInsightBox data={result} contextKey={`quick-phone-${searchInput}`} askAI={askAI} />}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+const geoUrl = "https://unpkg.com/world-atlas@2.0.2/countries-110m.json";
+
+function ThreatMap() {
+  const mapData = useMemo(() => {
+    return [
+      { name: "NA Command", coordinates: [-100, 40], isSource: false, color: "#10B981" },
+      { name: "EU Target", coordinates: [15, 50], isSource: false, color: "#EF4444" },
+      { name: "APAC Node", coordinates: [110, 30], isSource: true, color: "#F59E0B" },
+      { name: "SA Node", coordinates: [-60, -10], isSource: true, color: "#8B5CF6" },
+      { name: "AF Gateway", coordinates: [20, 10], isSource: true, color: "#EF4444" },
+      { name: "ME Vector", coordinates: [45, 25], isSource: false, color: "#10B981" },
+    ];
+  }, []);
+
+  return (
+    <div className="relative w-full h-[300px] md:h-[400px] bg-surface/50 rounded-xl overflow-hidden border border-border mt-4">
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        <h4 className="text-xs font-bold uppercase tracking-widest text-text-main filter drop-shadow-md">Global Activity Map</h4>
+        <div className="flex flex-col gap-1 text-[10px] text-text-dim bg-black/50 p-2 rounded backdrop-blur">
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#EF4444] animate-pulse"></div> High Threat</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#10B981]"></div> Secured Zone</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F59E0B]"></div> Anomaly Detected</div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#8B5CF6]"></div> Unknown Vector</div>
+        </div>
+      </div>
+      <ComposableMap projection="geoMercator" projectionConfig={{ scale: 120 }}>
+        <Geographies geography={geoUrl}>
+          {({ geographies }) =>
+            geographies.map((geo) => (
+              <Geography
+                key={geo.rsmKey}
+                geography={geo}
+                fill="#1E293B"
+                stroke="#334155"
+                strokeWidth={0.5}
+                style={{
+                  default: { outline: "none" },
+                  hover: { fill: "#334155", outline: "none" },
+                  pressed: { outline: "none" },
+                }}
+              />
+            ))
+          }
+        </Geographies>
+        {mapData.map((marker, i) => (
+          <Marker key={`marker-${i}`} coordinates={marker.coordinates as any}>
+            <circle r={6} fill={marker.color} stroke="#0E1228" strokeWidth={2} />
+            <circle r={12} fill={marker.color} opacity={0.3} className="animate-ping" />
+          </Marker>
+        ))}
+        {mapData.filter(m => !m.isSource).map((target, i) => {
+          const sources = mapData.filter(m => m.isSource);
+          const source = sources[i % sources.length];
+          return (
+            <Line
+              key={`line-${i}`}
+              from={source.coordinates as any}
+              to={target.coordinates as any}
+              stroke={target.color}
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              className="animate-pulse"
+              style={{ strokeOpacity: 0.6 }}
+            />
+          );
+        })}
+      </ComposableMap>
+    </div>
+  );
+}
+
+function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThreatIntelSummary, globalThreats, activityLogs, scoreHistory, detectAnomalies, weather, toggleAutoMonitoring, autoRectify, optimizePhone, createAlert, performScan, setActiveScreen, askAI, logActivity }: any) {
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectionResult, setDetectionResult] = useState<any>(null);
+  const [intelSummary, setIntelSummary] = useState<string | null>(null);
+  const [isRefreshingIntel, setIsRefreshingIntel] = useState(false);
+  const [deviceIntelSummary, setDeviceIntelSummary] = useState<string | null>(null);
+  const [showComplianceInfo, setShowComplianceInfo] = useState(false);
+  const [isRTAActive, setIsRTAActive] = useState(true);
+  const [isRTAAnimating, setIsRTAAnimating] = useState(false);
+  const fetchingIntel = useRef(false);
+  const [isAutoRectifying, setIsAutoRectifying] = useState(false);
+
+  const handleRefreshIntelSummary = async () => {
+    setIsRefreshingIntel(true);
+    setIntelSummary(null);
+    try {
+      const globalText = await fetchThreatIntelSummary(true);
+      setIntelSummary(globalText);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsRefreshingIntel(false);
+    }
+  };
+
+  const handleAutoRectify = async () => {
+    if (!profile?.isPremium) {
+      if (createAlert) {
+        createAlert('Premium Required', 'Upgrade to a premium subscription to use Auto-Rectify features.', 'low');
+      }
+      return;
+    }
+    
+    setIsAutoRectifying(true);
+    try {
+      const result = await autoRectify();
+      if (createAlert && result) {
+        createAlert(
+          'Auto-Rectify Complete', 
+          `Resolved ${result.resolvedAlerts} issue(s) and boosted security score to ${result.newScore}.`, 
+          'success'
+        );
+      }
+    } catch (e) {
+      if (createAlert) {
+        createAlert('Auto-Rectify Failed', 'An error occurred while attempting to rectify issues automatically.', 'high');
+      }
+    } finally {
+      setIsAutoRectifying(false);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSummaries = async () => {
+      if (fetchingIntel.current) return;
+      fetchingIntel.current = true;
+      const deviceText = await fetchDeviceIntelSummary();
+      if (mounted) {
+        setDeviceIntelSummary(deviceText);
+      }
+      setTimeout(async () => {
+        const globalText = await fetchThreatIntelSummary();
+        if (mounted) {
+          setIntelSummary(globalText);
+        }
+      }, 30000);
+      fetchingIntel.current = false;
+    };
+    if (!intelSummary || !deviceIntelSummary) {
+      loadSummaries();
+    }
+    return () => { mounted = false; };
+  }, [fetchDeviceIntelSummary, fetchThreatIntelSummary, intelSummary, deviceIntelSummary]);
+
+  useEffect(() => {
+    let rtaInterval: NodeJS.Timeout;
+    if (isRTAActive) {
+      rtaInterval = setInterval(async () => {
+        // randomly trigger anomaly detection or block simulated threat
+        if (Math.random() > 0.85) {
+            const anomalyRes = await detectAnomalies();
+            if (anomalyRes && anomalyRes.isAnomaly && createAlert) {
+               createAlert('Threat Blocked', `Real-time Shield blocked a generic attack on your device processes`, 'medium');
+            }
+        }
+      }, 120000); // Check every 2 minutes
+    }
+    return () => {
+      if (rtaInterval) clearInterval(rtaInterval);
+    };
+  }, [isRTAActive, detectAnomalies, createAlert]);
+
+  const handleDetect = async () => {
+    setIsDetecting(true);
+    const result = await detectAnomalies();
+    setDetectionResult(result);
+    setIsDetecting(false);
+  };
+
+  const score = profile?.securityScore || 0;
+  const getScoreColor = (s: number) => {
+    if (s >= 80) return 'text-success';
+    if (s >= 50) return 'text-accent';
+    return 'text-danger';
+  };
+
+  const riskScore = 100 - score;
+
+  const COLORS = ['#00E5FF', '#8A2BE2', '#FFB020', '#FF3B30', '#00C853'];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="space-y-10"
+    >
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <h2 className="text-3xl font-bold tracking-tight">Protection Overview</h2>
+        <div className="flex items-center gap-3 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
+          <button 
+            onClick={handleAutoRectify}
+            disabled={isAutoRectifying}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#00E5FF] text-white font-bold rounded-lg hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAutoRectifying ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {isAutoRectifying ? 'Rectifying...' : 'Auto-Rectify Issues'}
+          </button>
+          <MiniWorldClock />
+          {weather && <WeatherWidget weather={weather} />}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-1 flex flex-col items-center p-6 glass-card space-y-8 w-full min-w-0 relative overflow-hidden">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl"></div>
+          <div className="relative w-48 h-48 flex items-center justify-center shrink-0">
+            <div className="absolute inset-0 rounded-full border-[10px] border-surface shadow-[0_0_20px_rgba(0,229,255,0.1)]" />
+            <svg className="w-full h-full transform -rotate-90">
+              <defs>
+                <linearGradient id="riskGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#00C853" />
+                  <stop offset="50%" stopColor="#FFB020" />
+                  <stop offset="100%" stopColor="#FF3B30" />
+                </linearGradient>
+              </defs>
+              <motion.circle 
+                cx="96" cy="96" r="86" stroke="currentColor" strokeWidth="10" fill="transparent" 
+                className="text-white/5"
+              />
+              <motion.circle 
+                cx="96" cy="96" r="86" stroke="url(#riskGradient)" strokeWidth="10" fill="transparent" strokeLinecap="round"
+                strokeDasharray={540.35}
+                initial={{ strokeDashoffset: 540.35 }}
+                animate={{ strokeDashoffset: 540.35 - (540.35 * riskScore) / 100 }}
+                transition={{ duration: 1.5, ease: "easeOut" }}
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center justify-center">
+              <span className="text-[10px] text-text-dim uppercase tracking-widest font-semibold mb-1">Risk Score</span>
+              <span className="text-5xl font-black cyber-gradient bg-clip-text text-transparent drop-shadow-md">{riskScore}</span>
+              <span className={cn("text-xs font-bold uppercase mt-1 px-2 py-0.5 rounded", 
+                riskScore > 75 ? "bg-danger/20 text-danger" : 
+                riskScore > 30 ? "bg-accent/20 text-accent" : "bg-success/20 text-success")}
+              >
+                {riskScore > 75 ? "Critical" : riskScore > 30 ? "Elevated" : "Low Risk"}
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full space-y-3 mt-4">
+            <h4 className="text-[10px] uppercase tracking-widest text-text-dim text-center mb-4">Score Breakdown</h4>
+            {[
+              { label: 'Password Strength', max: 30, value: Math.round(score * 0.30), icon: <Lock size={14} />, desc: 'Complexity and rotation' },
+              { label: 'Network Activity', max: 20, value: Math.round(score * 0.20), icon: <Network size={14} />, desc: 'Encryption and traffic' },
+              { label: 'Device Settings', max: 20, value: Math.round(score * 0.20), icon: <Smartphone size={14} />, desc: '2FA and configuration' },
+              { label: 'Breach History', max: 30, value: score - Math.round(score * 0.30) - Math.round(score * 0.20) - Math.round(score * 0.20), icon: <ShieldAlert size={14} />, desc: 'Known leaks and exposures' }
+            ].map((item, i) => (
+               <div key={i} className="flex flex-col gap-1.5 p-3 bg-surface/40 border border-border/50 rounded-xl relative overflow-hidden group hover:bg-surface/60 transition-colors">
+                 <div className="absolute top-0 right-0 p-3 opacity-10 transform translate-x-2 -translate-y-2 group-hover:scale-110 transition-transform">
+                   {item.icon}
+                 </div>
+                 <div className="flex justify-between items-end relative z-10">
+                   <div className="flex flex-col">
+                     <div className="flex items-center gap-1.5 mb-1">
+                       <span className="text-[11px] font-bold text-text-main leading-none">{item.label}</span>
+                     </div>
+                     <span className="text-[9px] text-text-dim">{item.desc}</span>
+                   </div>
+                   <div className="flex items-baseline gap-1">
+                     <span className={cn("font-black text-sm leading-none", getScoreColor((item.value / item.max) * 100))}>+{item.value}</span>
+                     <span className="text-[10px] text-text-dim font-medium">/ {item.max} pts</span>
+                   </div>
+                 </div>
+                 <div className="w-full h-1.5 bg-background rounded-full overflow-hidden mt-1 relative z-10 border border-border/30">
+                   <motion.div 
+                     initial={{ width: 0 }}
+                     animate={{ width: `${(item.value / item.max) * 100}%` }}
+                     transition={{ duration: 1.5, ease: "easeOut", delay: i * 0.1 }}
+                     className={cn("h-full rounded-full", (item.value / item.max) * 100 >= 80 ? 'bg-success' : (item.value / item.max) * 100 >= 50 ? 'bg-accent' : 'bg-danger')} 
+                   />
+                 </div>
+               </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 glass-card p-6 space-y-4 min-w-0">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">Score History</h4>
+            <div className="flex items-center gap-2 text-[10px] text-text-dim">
+              <div className="w-2 h-2 bg-primary rounded-full" />
+              Security Posture
+            </div>
+          </div>
+          <div className="h-[180px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={scoreHistory}>
+                <defs>
+                  <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis 
+                  dataKey="timestamp" 
+                  hide 
+                />
+                <YAxis 
+                  domain={[0, 100]} 
+                  stroke="rgba(255,255,255,0.3)" 
+                  fontSize={10} 
+                  tickCount={5}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0E1228', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                  itemStyle={{ color: '#FFFFFF', fontSize: '12px' }}
+                  labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="score" 
+                  stroke="#8B5CF6" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorScore)" 
+                  animationDuration={2000}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <DeviceHealthChart logActivity={logActivity} createAlert={createAlert} scoreHistory={scoreHistory} optimizePhone={optimizePhone} />
+
+      <CyberNewsFeed createAlert={createAlert} askAI={askAI} />
+
+      {/* Global Threat Intelligence Section */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Globe className="text-primary" size={24} />
+          <h3 className="text-xl font-bold">Global Threat Intelligence</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Mitre ATT&CK & STRIDE Distribution */}
+          <div className="glass-card p-6 space-y-6 min-w-0">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Threat Frameworks</h4>
+              <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded">ATT&CK / STRIDE / OWASP</span>
+            </div>
+            <div className="h-[250px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={globalThreats.mitreAttack.concat(globalThreats.stride).concat(globalThreats.owasp)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="tactic" hide />
+                  <XAxis dataKey="threat" hide />
+                  <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0E1228', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                    itemStyle={{ color: '#FFFFFF', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="count" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-[10px] text-text-dim">
+              <div className="space-y-1">
+                <div className="font-bold text-text-main">Mitre ATT&CK</div>
+                {globalThreats.mitreAttack.map((m: any) => (
+                  <div key={m.tactic} className="flex justify-between">
+                    <span className="truncate mr-1">{m.tactic}</span>
+                    <span className="text-primary">{m.count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <div className="font-bold text-text-main">STRIDE</div>
+                {globalThreats.stride.map((s: any) => (
+                  <div key={s.threat} className="flex justify-between">
+                    <span className="truncate mr-1">{s.threat}</span>
+                    <span className="text-secondary">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <div className="font-bold text-text-main">OWASP Top 10</div>
+                {globalThreats.owasp.map((o: any) => (
+                  <div key={o.risk} className="flex justify-between">
+                    <span className="truncate mr-1">{o.risk}</span>
+                    <span className="text-accent">{o.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Compliance & Data Breach Risks */}
+          <div className="glass-card p-6 space-y-6 min-w-0">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Compliance Risk (ISO/NIST/GDPR)</h4>
+              <button 
+                onClick={() => setShowComplianceInfo(true)}
+                className="p-1.5 hover:bg-white/5 rounded-lg transition-colors group"
+                title="View Compliance Details"
+              >
+                <FileText className="text-accent group-hover:scale-110 transition-transform" size={18} />
+              </button>
+            </div>
+            <div className="h-[250px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={globalThreats.compliance}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="violations"
+                  >
+                    {globalThreats.compliance.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0E1228', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                    itemStyle={{ color: '#FFFFFF', fontSize: '12px' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-3">
+              {globalThreats.compliance.map((c: any) => (
+                <div key={c.standard} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", c.status === 'Critical' ? 'bg-danger' : 'bg-accent')} />
+                    <span className="font-bold">{c.standard}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-text-dim">{c.violations} Violations</span>
+                    <span className={cn("px-2 py-0.5 rounded text-[10px]", c.status === 'Critical' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent')}>
+                      {c.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time Threat Distribution Map (Simplified) */}
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="text-success" size={18} />
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Real-time Regional Distribution</h4>
+            </div>
+            <span className="text-[10px] text-success animate-pulse">● LIVE FEED</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {globalThreats.regions.map((r: any) => (
+              <div key={r.name} className="bg-bg/50 p-3 rounded-xl border border-border text-center space-y-1">
+                <div className="text-[10px] text-text-dim uppercase tracking-tighter">{r.name}</div>
+                <div className="text-lg font-bold text-primary">{r.threats.toLocaleString()}</div>
+                <div className="text-[8px] text-success">Active Scans</div>
+              </div>
+            ))}
+          </div>
+          <ThreatMap />
+        </div>
+
+        {/* AI Threat Intel Summary */}
+        <div className="glass-card p-6 space-y-4 col-span-1 lg:col-span-3">
+          <div className="flex items-center gap-3 mb-2">
+           <div className="bg-primary/20 p-2 rounded-xl border border-primary/30">
+             <MessageSquare size={18} className="text-primary" />
+           </div>
+           <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">AI Threat Summary</h4>
+           <div className="flex items-center gap-2 ml-auto">
+             <button
+               onClick={handleRefreshIntelSummary}
+               disabled={isRefreshingIntel || !intelSummary}
+               className="p-1.5 text-text-dim hover:text-primary hover:bg-primary/10 rounded-lg transition-colors disabled:opacity-50"
+               title="Refresh AI Summary"
+               aria-label="Refresh AI Summary"
+             >
+               <RefreshCw size={14} className={cn(isRefreshingIntel && "animate-spin")} />
+             </button>
+             <span className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded">AI Summarized</span>
+           </div>
+          </div>
+          {intelSummary ? (
+            <div className="text-sm text-text-main leading-relaxed space-y-3 prose prose-invert prose-p:my-1 prose-strong:text-white prose-h3:text-primary prose-h3:text-lg prose-h3:font-bold prose-h3:mt-6 prose-h3:mb-2 prose-ul:ml-4 prose-ul:list-disc prose-li:my-0.5 max-w-none break-words whitespace-pre-wrap">
+               <ReactMarkdown>{intelSummary}</ReactMarkdown>
+            </div>
+          ) : (
+             <div className="flex items-center gap-3 text-text-dim text-sm animate-pulse">
+               <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+               Analyzing global threat reports...
+             </div>
+          )}
+        </div>
+
+        {/* Device Intel Summary */}
+        <div className="glass-card p-6 space-y-4 col-span-1 lg:col-span-3">
+          <div className="flex items-center gap-3 mb-2">
+           <div className="bg-[#3B82F6]/20 p-2 rounded-xl border border-[#3B82F6]/30">
+             <Smartphone size={18} className="text-[#3B82F6]" />
+           </div>
+           <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Device Intelligence & Security Status</h4>
+           <span className="text-[10px] text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5 rounded ml-auto">Local Device</span>
+          </div>
+          {deviceIntelSummary ? (
+            <div className="text-sm text-text-main leading-relaxed space-y-3 prose prose-invert prose-p:my-1 prose-strong:text-white prose-h3:text-[#3B82F6] prose-h3:text-lg prose-h3:font-bold prose-h3:mt-6 prose-h3:mb-2 prose-ul:ml-4 prose-ul:list-disc prose-li:my-0.5 max-w-none break-words whitespace-pre-wrap">
+               <ReactMarkdown>{deviceIntelSummary}</ReactMarkdown>
+            </div>
+          ) : (
+             <div className="flex items-center gap-3 text-text-dim text-sm animate-pulse">
+               <div className="w-4 h-4 rounded-full border-2 border-[#3B82F6] border-t-transparent animate-spin" />
+               Analyzing local device status...
+             </div>
+          )}
+        </div>
+        <div className="glass-card p-6 space-y-4 col-span-1 lg:col-span-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-danger/20 p-2 rounded-xl border border-danger/30">
+                <Ghost size={18} className="text-danger" />
+              </div>
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Dark Web Data Exposures</h4>
+            </div>
+            <button 
+               onClick={() => setActiveScreen('darkweb')}
+               className="text-xs bg-danger/10 text-danger border border-danger/20 px-4 py-2 rounded-xl hover:bg-danger/20 transition-colors font-bold uppercase tracking-widest"
+            >
+              Open Dark Web Monitor
+            </button>
+          </div>
+          <div className="text-sm text-text-dim max-w-xl">
+             Continuously scan the dark web, hacker forums, and ransomware leak sites to detect if your personal information or credentials have been exposed in any breaches online.
+          </div>
+        </div>
+        <QuickUrlScanner performScan={performScan} setActiveScreen={setActiveScreen} />
+      </section>
+
+      {/* Device Protection Center */}
+      <section className="space-y-6">
+        <h3 className="text-xl font-bold flex items-center gap-3">
+          <ShieldCheck className="text-[#10B981]" size={24} /> Device Protection Center
+        </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="glass-card p-6 space-y-4">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim mb-4">Core Defenses</h4>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-border">
+                <div className="flex items-center gap-3">
+                  <div className={cn("p-2 rounded-lg transition-colors", isRTAActive ? "bg-primary/20" : "bg-white/10")}>
+                    <ShieldAlert size={16} className={cn("transition-colors", isRTAActive ? "text-primary" : "text-text-dim")} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold flex items-center gap-2">
+                       Real-time Antivirus
+                       {isRTAAnimating && <div className="w-2 h-2 bg-primary rounded-full animate-ping"></div>}
+                    </div>
+                    <div className="text-[10px] text-text-dim">
+                       {isRTAActive ? (isRTAAnimating ? "Scanning in background..." : "Active memory & file scanning") : "Protection Disabled"}
+                    </div>
+                  </div>
+                </div>
+                <div 
+                  onClick={() => {
+                    setIsRTAActive(!isRTAActive);
+                    if (!isRTAActive) {
+                      createAlert && createAlert("Antivirus", "Real-time Antivirus activated. Scanning files in the background...", "low");
+                      setIsRTAAnimating(true);
+                      setTimeout(() => setIsRTAAnimating(false), 5000);
+                    } else {
+                      createAlert && createAlert("Antivirus", "Real-time Antivirus disabled. Your device is vulnerable.", "high");
+                    }
+                  }}
+                  className={cn("w-10 h-5 rounded-full relative cursor-pointer outline-none transition-colors", isRTAActive ? "bg-primary" : "bg-border")}
+                >
+                  <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", isRTAActive ? "right-1" : "left-1")}></div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-border">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-[#F59E0B]/10 rounded-lg"><Network size={16} className="text-[#F59E0B]" /></div>
+                  <div>
+                    <div className="text-sm font-bold">No-Root Firewall</div>
+                    <div className="text-[10px] text-text-dim">Local VPN loopback blocking trackers</div>
+                  </div>
+                </div>
+                <div className="w-10 h-5 rounded-full bg-[#F59E0B] relative cursor-pointer"><div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div></div>
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                 setActiveScreen('scan');
+                 // Simulate triggering an antivirus scan by selecting 'antivirus' automatically in the scan center if we had a way to pass that state
+                 // The user will be redirected to the Scan Center
+              }}
+              className="w-full py-3 mt-2 bg-surface border border-border rounded-xl text-xs font-bold hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={14} className={cn("text-primary", isRTAAnimating && "animate-spin")} /> Run Deep System Scan
+            </button>
+          </div>
+
+          <div className="glass-card p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">App Permission Monitor</h4>
+              <span className="text-[10px] bg-accent/20 text-accent px-2 py-1 rounded font-bold">3 ALERTS</span>
+            </div>
+            <p className="text-[10px] text-text-dim">Detecting apps that can steal data or access sensitive hardware.</p>
+            <div className="space-y-2 mt-2">
+              {[
+                { app: 'Social Connect', perm: 'Camera & Contacts', risk: 'High' },
+                { app: 'Flashlight Pro', perm: 'Precise Location', risk: 'High' },
+                { app: 'Weather Widget', perm: 'Microphone', risk: 'Medium' }
+              ].map((app, i) => (
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-danger/5 border border-danger/20 rounded-xl gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-surface border border-border rounded flex items-center justify-center text-text-dim"><Smartphone size={12} /></div>
+                    <div>
+                      <div className="text-xs font-bold">{app.app}</div>
+                      <div className="text-[9px] text-text-dim font-mono">{app.perm}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-danger">{app.risk} Risk</span>
+                    <button className="text-[10px] font-bold text-white bg-danger/80 hover:bg-danger px-3 py-1.5 rounded transition-colors">Revoke</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Security Monitoring & Anomaly Detection */}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Activity className="text-primary" size={24} />
+            <h3 className="text-xl font-bold">Security Monitoring</h3>
+          </div>
+          <button 
+            onClick={handleDetect}
+            disabled={isDetecting || activityLogs.length < 1}
+            className={cn(
+              "px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2",
+              isDetecting ? "bg-white/5 text-text-dim cursor-not-allowed" : "bg-primary text-white hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]"
+            )}
+          >
+            {isDetecting ? (
+              <>
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity }}><Activity size={14} /></motion.div>
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Zap size={14} />
+                Run AI Anomaly Check
+              </>
+            )}
+          </button>
+        </div>
+
+        {detectionResult && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={cn(
+              "p-4 rounded-2xl border flex items-start gap-4",
+              detectionResult.isAnomaly 
+                ? "bg-danger/10 border-danger/30 text-danger" 
+                : "bg-success/10 border-success/30 text-success"
+            )}
+          >
+            <div className="p-2 rounded-full bg-white/10">
+              {detectionResult.isAnomaly ? <AlertTriangle size={20} /> : <CheckCircle2 size={20} />}
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-bold uppercase tracking-wider">
+                {detectionResult.isAnomaly ? 'Anomaly Detected' : 'System Secure'}
+              </div>
+              <p className="text-xs opacity-80 leading-relaxed">{detectionResult.reason}</p>
+              <div className="text-[10px] font-medium opacity-60">
+                Confidence: {(detectionResult.confidence * 100).toFixed(0)}% • Severity: {detectionResult.severity}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        <div className="glass-card overflow-hidden">
+          <div className="p-4 border-b border-border bg-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity size={14} className="text-primary" />
+              <span className="text-xs font-bold uppercase tracking-widest text-text-dim">Recent Activity Logs</span>
+            </div>
+            <span className="text-[10px] text-text-dim">{activityLogs.length} events recorded</span>
+          </div>
+          <div className="max-h-80 overflow-y-auto scrollbar-hide">
+            {activityLogs.length === 0 ? (
+              <div className="p-10 text-center text-text-dim text-sm italic">No recent activity detected.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {activityLogs.slice().sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((log: any) => (
+                  <div key={log.id} className="p-4 hover:bg-white/5 transition-all flex items-start gap-4 group">
+                    <div className={cn(
+                      "p-2 rounded-xl border border-border shrink-0 mt-0.5",
+                      String(log.action).includes('scan') ? "bg-primary/10 text-primary" : 
+                      String(log.action).includes('2fa') ? "bg-success/10 text-success" :
+                      String(log.action).includes('vault') ? "bg-accent/10 text-accent" :
+                      String(log.action).includes('disk') || String(log.action).includes('high_memory') || String(log.action).includes('cache') ? "bg-accent/10 text-accent" : "bg-surface text-text-dim"
+                    )}>
+                      {String(log.action).includes('scan') ? <Search size={14} /> : 
+                       String(log.action).includes('2fa') ? <Lock size={14} /> :
+                       String(log.action).includes('vault') ? <Shield size={14} /> :
+                       String(log.action).includes('disk') || String(log.action).includes('high_memory') || String(log.action).includes('cache') ? <Activity size={14} /> : <Activity size={14} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="font-bold text-sm capitalize truncate pr-2">
+                          {String(log.action).replace(/_/g, ' ')}
+                        </div>
+                        <div className="text-[10px] text-text-dim whitespace-nowrap font-mono">
+                          {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-text-dim">
+                        <span className="flex items-center gap-1"><Globe size={10} /> {log.ip}</span>
+                        <span className="flex items-center gap-1 truncate"><Zap size={10} /> {log.device.split(') ')[0].split(' (')[1] || 'Unknown Device'}</span>
+                      </div>
+                      {log.metadata && Object.keys(log.metadata).length > 0 && (
+                        <div className="mt-2 p-2 bg-bg/50 rounded-lg border border-border/50 text-[9px] font-mono text-text-dim break-all">
+                          {Object.entries(log.metadata).map(([k, v]) => `${k}: ${v}`).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">Password Leaks</span>
+            <span className="text-xs text-success font-bold">✓ Safe</span>
+          </div>
+          <div className="text-4xl font-bold">{breaches.length.toString().padStart(2, '0')}</div>
+          <div className="text-xs text-text-dim">Leaks detected in last 30 days</div>
+        </div>
+        
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">AI Phishing Filter</span>
+            <span className="text-xs text-primary font-bold">Active</span>
+          </div>
+          <div className="text-4xl font-bold">99.4%</div>
+          <div className="text-xs text-text-dim">Detection accuracy active</div>
+        </div>
+
+        <div className="glass-card p-6 space-y-4 border-accent/30 bg-accent/5">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">Key Features</span>
+            <button className="bg-accent text-bg px-2 py-0.5 rounded text-[10px] font-black">PRO</button>
+          </div>
+          <div className="text-4xl font-bold">9</div>
+          <div className="text-xs text-text-dim">Powerful capabilities</div>
+        </div>
+
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">Device Security Scanner</span>
+            <span className="text-xs text-success font-bold">Secure</span>
+          </div>
+          <div className="text-4xl font-bold">92%</div>
+          <div className="text-xs text-text-dim">OS: Android 16 (Up to date)</div>
+        </div>
+
+        <div className="glass-card p-6 space-y-4 md:col-span-2 lg:col-span-1 border border-accent/20">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold flex items-center gap-2"><Zap size={16} className="text-success" /> Phone Optimizer</span>
+            <button 
+              onClick={async () => {
+                const btn = document.getElementById('opt-btn');
+                if (btn) btn.innerText = 'Optimizing...';
+                const res = await optimizePhone();
+                if (btn) btn.innerText = 'Optimize Again';
+                const stat = document.getElementById('opt-status');
+                if (stat) stat.innerText = res;
+              }}
+              id="opt-btn"
+              className="bg-accent/20 text-accent px-3 py-1 text-xs font-bold rounded-lg hover:bg-accent/30 transition-colors"
+            >
+              Optimize
+            </button>
+          </div>
+          <div className="text-4xl font-bold">100%</div>
+          <div id="opt-status" className="text-xs text-text-dim">Junk files cleared & memory freed</div>
+        </div>
+      </div>
+      <AnimatePresence>
+        {showComplianceInfo && <ComplianceInfoModal onClose={() => setShowComplianceInfo(false)} />}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, profile, activeLinkSource, setActiveLinkSource, setShowLinkModal, linkages, askAI, scans, rewardUserWithScan }: any) {
+  const [scanType, setScanType] = useState<'phishing' | 'email' | 'sms' | 'phone' | 'name' | 'company' | 'username' | 'domain' | 'url' | 'training' | 'file' | 'antivirus'>('phishing');
+  const [input, setInput] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [currentPhases, setCurrentPhases] = useState<string[]>([]);
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
+  const [result, setResult] = useState<any>(null);
+  const [draftResult, setDraftResult] = useState<any>(null);
+  const [filterVerdict, setFilterVerdict] = useState<string>('All');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [urgency, setUrgency] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  
+  const cancelRef = useRef<boolean>(false);
+  
+  // Advanced Search State
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advNameVariations, setAdvNameVariations] = useState('');
+  const [advAssociatedCompanies, setAdvAssociatedCompanies] = useState('');
+  const [advDigitalInconsistencies, setAdvDigitalInconsistencies] = useState('');
+  const [advOtherKeywords, setAdvOtherKeywords] = useState('');
+
+  const [isAdLoading, setIsAdLoading] = useState(false);
+
+  const handleWatchAd = async (type: 'phone' | 'forensics') => {
+    setIsAdLoading(true);
+    try {
+      const { BillingService, AD_UNITS } = await import('./utils/billing');
+      const success = await BillingService.showRewardedAd(AD_UNITS.REWARDED_SCAN);
+      if (success) {
+        await rewardUserWithScan(type);
+      }
+    } catch (e) {
+       console.error("Ad failed to load/play", e);
+    } finally {
+      setIsAdLoading(false);
+    }
+  };
+
+  const { isValidFormat, formatError } = React.useMemo(() => {
+    if (!input) return { isValidFormat: true, formatError: '' };
+
+    if (scanType === 'url') {
+      const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(:[0-9]{1,5})?(\/.*)?$/;
+      const valid = urlPattern.test(input.trim());
+      return { isValidFormat: valid, formatError: valid ? '' : 'Invalid URL format' };
+    }
+
+    const items = input.split(',').map(s => s.trim()).filter(Boolean);
+    if (items.length === 0) return { isValidFormat: true, formatError: '' };
+
+    if (scanType === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const valid = items.every(e => emailRegex.test(e));
+      return { isValidFormat: valid, formatError: valid ? '' : 'Please enter a valid email address' };
+    }
+    if (scanType === 'phone') {
+      const valid = items.every(p => /^\+?[0-9\s\-\(\)]+$/.test(p) && p.replace(/[^0-9]/g, '').length >= 7);
+      return { isValidFormat: valid, formatError: valid ? '' : 'Invalid phone number format' };
+    }
+    if (scanType === 'domain') {
+      const valid = items.every(d => /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/.test(d));
+      return { isValidFormat: valid, formatError: valid ? '' : 'Invalid domain format' };
+    }
+    return { isValidFormat: true, formatError: '' };
+  }, [input, scanType]);
+
+  const isSubscriber = !!profile?.subscriptionTier && profile?.subscriptionTier !== 'free';
+  
+  const isOutOfCyberForensicsScans = !isSubscriber && (profile?.forensicsScansLeft ?? 5) <= 0;
+  const isOutOfPhoneScans = !isSubscriber && (profile?.phoneScansLeft ?? 3) <= 0;
+  
+  const outOfFreeScans = (scanType === 'phone' && isOutOfPhoneScans) || (scanType !== 'phone' && isOutOfCyberForensicsScans);
+
+  if (outOfFreeScans) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-6">
+        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+          <Search size={48} className="text-primary/40" />
+        </div>
+        <h2 className="text-2xl font-bold">Free Scan Limit Reached</h2>
+        <p className="text-text-dim max-w-md mx-auto leading-relaxed">
+          {scanType === 'phone' 
+            ? "You've used your 3 free Phone Scans. Upgrade to a subscription-based membership or watch an ad to earn more scans." 
+            : "You've used your 5 free Cyber Forensics scans. Upgrade to a subscription-based membership or watch an ad to earn more scans."}
+        </p>
+        <div className="flex gap-4 items-center justify-center flex-wrap">
+          <button 
+            onClick={() => setActiveScreen('pricing')}
+            className="px-8 py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 transition-all"
+          >
+            View Plans
+          </button>
+          <button 
+            onClick={() => handleWatchAd(scanType === 'phone' ? 'phone' : 'forensics')}
+            disabled={isAdLoading}
+            className="px-8 py-4 bg-surface border border-border text-text-main font-bold rounded-2xl hover:bg-white/5 transition-all flex items-center gap-2 group disabled:opacity-50"
+          >
+            {isAdLoading ? <Activity size={18} className="animate-spin text-accent" /> : <Play size={18} className="text-accent group-hover:scale-110 transition-transform" />}
+            {isAdLoading ? 'Loading Ad...' : 'Watch Ad (+1 Scan)'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScan = async (overrideType?: any, overrideInput?: string) => {
+    const isStringOverride = typeof overrideType === 'string';
+    const finalType = isStringOverride ? overrideType : scanType;
+    const finalInput = isStringOverride ? overrideInput || input : input;
+    if (!finalInput && finalType !== 'file' && finalType !== 'antivirus') return;
+    if (finalType === 'file' && !imageFile) return;
+    
+    if ((finalType === 'url' || finalType === 'email') && !isValidFormat) return;
+    
+    if (isStringOverride && overrideInput) {
+      setScanType(overrideType as any);
+      setInput(overrideInput);
+    }
+    
+    setRecentSearches(prev => {
+      const target = finalType === 'file' ? imageFile?.name || 'File Upload' : finalType === 'antivirus' ? 'Device Scan' : finalInput;
+      const updated = [target, ...prev.filter(s => s !== target)].slice(0, 5);
+      return updated;
+    });
+    
+    playScanSound();
+    cancelRef.current = false;
+    setScanning(true);
+    setScanProgress(0);
+    setResult(null);
+    const logInputName = finalType === 'file' ? imageFile?.name || 'file' : finalType === 'antivirus' ? 'device' : finalInput.substring(0, 10);
+    logActivity('scan_started', { type: finalType, input: logInputName + '...', urgency });
+    
+    // Adjust scan speed based on urgency just for simulated effect
+    const speedMultiplier = urgency === 'High' ? 1.5 : urgency === 'Low' ? 0.6 : 1;
+    
+    const scanPhases = {
+      phishing: ["Extracting text features...", "Analyzing sentence structure...", "Detecting persuasive elements...", "Cross-referencing scam patterns...", "Evaluating payload and links...", "Finalizing threat assessment..."],
+      email: ["Verifying format and syntax...", "Checking DNS MX records...", "Analyzing Sender Reputation...", "Validating SPF/DKIM/DMARC...", "Searching known breach databases...", "Scanning dark web markets...", "Compiling CyberAmour comprehensive report..."],
+      sms: ["Extracting message content...", "Checking sender against spam lists...", "Analyzing embedded hooks/links...", "Detecting smishing patterns...", "Evaluating urgency signals...", "Finalizing risk score..."],
+      phone: ["Formatting international number...", "Querying robocall registries...", "Checking carrier blocklists...", "Searching fraud complaint networks...", "Analyzing reputation score...", "Identifying related malicious activity..."],
+      name: ["Initializing comprehensive search...", "Scanning public records...", "Checking social media footprints...", "Cross-referencing known aliases...", "Searching data leak dumps...", "Generating identity credibility profile..."],
+      company: ["Retrieving corporate registration...", "Checking financial blacklists...", "Analyzing domain association...", "Searching scam reports...", "Validating business authenticity...", "Compiling CyberAmour comprehensive report..."],
+      username: ["Searching common platforms...", "Checking forum registrations...", "Analyzing dark web mentions...", "Identifying linked personas...", "Generating credibility score..."],
+      domain: ["Analyzing domain syntax...", "Checking WHOIS registration...", "Validating DNS records...", "Scanning for typosquatting...", "Checking URL reputation engines...", "Detecting blacklisted IPs..."],
+      url: ["Extracting URL components...", "Analyzing path and parameters...", "Checking domain reputation...", "Detecting obfuscation...", "Tracing redirection chain...", "Validating SSL certificate...", "Checking anti-phishing lists..."],
+      antivirus: ["Initializing heuristics engine...", "Analyzing binary signature...", "Checking for rootkits & APTs...", "Simulating execution in sandbox...", "Evaluating for obfuscation...", "Detecting zero-day threats...", "Finalizing behavioral assessment..."],
+      default: ["Initializing scan...", "Querying global intel feeds...", "Cross-referencing databases...", "Analyzing patterns with AI...", "Finalizing assessment..."]
+    };
+    const phaseList = scanPhases[finalType as keyof typeof scanPhases] || scanPhases.default;
+    setCurrentPhases(phaseList);
+    setCurrentPhaseIndex(0);
+
+    const progressInterval = setInterval(() => {
+      setScanProgress(prev => {
+        const increment = (Math.random() * 8 + 3) * speedMultiplier;
+        const newProgress = Math.min(prev + increment, 98);
+        const phaseIndex = Math.min(Math.floor((newProgress / 100) * phaseList.length), phaseList.length - 1);
+        setCurrentPhaseIndex(phaseIndex);
+        return newProgress;
+      });
+    }, 150);
+
+    try {
+      let res;
+      let finalResults: any = [];
+      let hasThreat = false;
+      const isSearchType = finalType === 'email' || finalType === 'phone' || finalType === 'name' || finalType === 'company' || finalType === 'username' || finalType === 'domain';
+      const inputs = finalInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+      const getAdvancedInput = (inp: string) => {
+        let advancedInputStr = inp;
+        if (isSearchType) {
+          const parts = [];
+          if (countryFilter || cityFilter) parts.push(`Location: ${cityFilter}${cityFilter && countryFilter ? ', ' : ''}${countryFilter}`);
+          if (showAdvancedFilters) {
+            if (advNameVariations) parts.push(`Name Variations/Aliases: ${advNameVariations}`);
+            if (advAssociatedCompanies) parts.push(`Associated Companies: ${advAssociatedCompanies}`);
+            if (advDigitalInconsistencies) parts.push(`Known Inconsistencies: ${advDigitalInconsistencies}`);
+            if (advOtherKeywords) parts.push(`Other Keywords: ${advOtherKeywords}`);
+          }
+          if (parts.length > 0) {
+            advancedInputStr = `${inp} (Additional Search context: ${parts.join(' | ')})`;
+          }
+        }
+        return advancedInputStr;
+      };
+
+      let fileData: any = undefined;
+      if (finalType === 'file' && imageFile) {
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(imageFile);
+        });
+        fileData = { mimeType: imageFile.type || 'application/octet-stream', data: base64Data, name: imageFile.name };
+      }
+
+      if (isSearchType && inputs.length > 1) {
+        const nestedResults = await Promise.all(inputs.map(async (inp) => {
+          if (cancelRef.current) throw new Error('SCAN_CANCELLED');
+          const advInput = getAdvancedInput(inp);
+          const individualRes = await performScan(finalType, advInput);
+          if (cancelRef.current) throw new Error('SCAN_CANCELLED');
+          const currentRes = [{ type: finalType, input: inp, ...individualRes }];
+          
+          if (finalType === 'email' && checkBreaches) {
+            const breaches = await checkBreaches(inp);
+            if (breaches) {
+              currentRes.push({ type: 'breach', input: inp, found: breaches });
+            }
+          }
+          return currentRes;
+        }));
+        
+        finalResults = nestedResults.flat();
+        hasThreat = finalResults.some((r: any) => r.verdict === 'Suspicious' || r.verdict === 'Malicious' || (r.leakages && r.leakages.length > 0) || (r.type === 'breach' && r.found?.length > 0));
+      } else {
+        const advancedInput = getAdvancedInput(finalInput);
+        const nameToUse = finalType === 'file' ? (imageFile?.name || 'file') : finalType === 'antivirus' ? 'Mobile Device' : advancedInput;
+        const resInputToUse = finalType === 'file' ? (imageFile?.name || 'file') : finalType === 'antivirus' ? 'Scan Device' : finalInput;
+        res = await performScan(finalType, nameToUse, fileData);
+        if (cancelRef.current) throw new Error('SCAN_CANCELLED');
+        finalResults = [{ type: finalType, input: resInputToUse, ...res }];
+        
+        if (finalType === 'email' && checkBreaches) {
+          const breaches = await checkBreaches(finalInput);
+          if (breaches) {
+            finalResults.push({ type: 'breach', input: finalInput, found: breaches });
+          }
+        }
+        hasThreat = finalResults.some((r: any) => r.verdict === 'Suspicious' || r.verdict === 'Malicious' || (r.leakages && r.leakages.length > 0) || (r.type === 'breach' && r.found?.length > 0));
+      }
+      
+      setScanProgress(100);
+      setCurrentPhaseIndex(100);
+      clearInterval(progressInterval);
+      
+      // small delay to show 100% just in case
+      setTimeout(() => {
+        setDraftResult({ finalResults, hasThreat });
+      }, 300);
+    } catch (e: any) {
+      clearInterval(progressInterval);
+      if (e.message === 'SCAN_CANCELLED') {
+        console.log('Scan cancelled by user.');
+        setResult(null);
+        setDraftResult(null);
+        return;
+      }
+      console.error(e);
+      playErrorSound();
+    } finally {
+      if (!cancelRef.current) {
+        setTimeout(() => {
+          setScanning(false);
+        }, 300);
+      } else {
+        setScanning(false);
+      }
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-6"
+    >
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold">Cyber Forensics (Scan Center)</h2>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-text-dim">Detect threats in real-time with AI.</p>
+          {!isSubscriber && (
+            <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full text-xs font-bold shadow-[0_0_10px_rgba(139,92,246,0.2)]">
+              {profile?.forensicsScansLeft || 0} free scans remaining
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Add prominent Quick Scanners here */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <QuickUrlScanner performScan={performScan} askAI={askAI} setActiveScreen={setActiveScreen} />
+        <GlobalIdentitySearch performScan={performScan} askAI={askAI} setActiveScreen={setActiveScreen} />
+      </div>
+
+      <div className="space-y-4 mb-6">
+        <div>
+          <h3 className="text-sm font-bold text-text-main mb-2 uppercase tracking-widest pl-2">Security & Threat Analysis</h3>
+          <div className="flex flex-wrap gap-3 p-2 bg-surface/30 rounded-3xl border border-border">
+            {([
+              { id: 'phishing', label: 'Phishing Analysis (Email/Text)' },
+              { id: 'sms', label: 'SMS Smishing Analysis' },
+              { id: 'file', label: 'File Malware Scan' },
+              { id: 'antivirus', label: 'Full Antivirus Scan' }
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { setScanType(t.id as any); setInput(''); setResult(null); setImagePreview(null); setImageFile(null); }}
+                className={cn(
+                  "px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border",
+                  scanType === t.id 
+                    ? "bg-primary text-white border-primary shadow-[0_0_15px_rgba(139,92,246,0.3)] shadow-primary/20 scale-105" 
+                    : "bg-surface border-border text-text-dim hover:text-text-main hover:border-text-dim/30 hover:bg-surface/80"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-sm font-bold text-text-main mb-2 uppercase tracking-widest pl-2">Investigating By Identity</h3>
+          <div className="flex flex-wrap gap-3 p-2 bg-surface/30 rounded-3xl border border-border">
+            {([
+              { id: 'email', label: 'Email Leaks' },
+              { id: 'phone', label: 'Phone' },
+              { id: 'name', label: 'Name' },
+              { id: 'company', label: 'Company' },
+              { id: 'username', label: 'Username' },
+              { id: 'domain', label: 'Domain' }
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { setScanType(t.id as any); setInput(''); setResult(null); setImagePreview(null); setImageFile(null); }}
+                className={cn(
+                  "px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border",
+                  scanType === t.id 
+                    ? "bg-[#3B82F6] text-white border-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.3)] shadow-[#3B82F6]/20 scale-105" 
+                    : "bg-surface border-border text-text-dim hover:text-text-main hover:border-text-dim/30 hover:bg-surface/80"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-bold text-text-main mb-2 uppercase tracking-widest pl-2">Education & Training</h3>
+          <div className="flex flex-wrap gap-3 p-2 bg-surface/30 rounded-3xl border border-border">
+            <button
+              onClick={() => { setScanType('training' as any); setInput(''); setResult(null); setImagePreview(null); setImageFile(null); }}
+              className={cn(
+                "px-5 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all border",
+                scanType === 'training'
+                  ? "bg-[#10B981] text-white border-[#10B981] shadow-[0_0_15px_rgba(16,185,129,0.3)] shadow-[#10B981]/20 scale-105"
+                  : "bg-surface border-border text-text-dim hover:text-text-main hover:border-text-dim/30 hover:bg-surface/80"
+              )}
+            >
+              Interactive Phishing Training
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {scanType === 'training' ? (
+        <PhishingTrainingModule onClose={() => setScanType('phishing')} logActivity={logActivity} />
+      ) : (
+        <>
+          <div className="space-y-4">
+            {scanType === 'file' ? (
+               <div className="w-full bg-surface/50 border border-dashed border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/5 transition-colors" onClick={() => fileInputRef.current?.click()}>
+                 <FileText size={48} className="text-primary mb-4" />
+                 <div className="text-sm font-bold text-text-main mb-1">
+                   Upload File for Malware Scan
+                 </div>
+                 <div className="text-xs text-text-dim">Supports executables, documents, archives</div>
+                 {imageFile && <div className="mt-4 text-primary text-sm font-bold">{imageFile.name}</div>}
+                 <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   className="hidden" 
+                   onChange={(e) => {
+                     const f = e.target.files?.[0];
+                     if (f) {
+                        setImageFile(f);
+                        setInput('File: ' + f.name); // To pass the validation if needed, or simply for visual completeness in some states
+                     }
+                   }}
+                 />
+               </div>
+            ) : scanType === 'antivirus' ? (
+               <div className="w-full bg-surface/50 border border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                 <ShieldAlert size={48} className="text-primary mb-4" />
+                 <div className="text-lg font-bold text-text-main mb-2">
+                   Deep Device Scanner
+                 </div>
+                 <div className="text-sm text-text-dim max-w-md">
+                   Perform a comprehensive scan of your device's file system, installed applications, and memory for viruses, rootkits, and advanced persistent threats.
+                 </div>
+               </div>
+            ) : (
+                <>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-dim">
+                  {scanType === 'phishing' && <ShieldAlert size={18} />}
+                  {scanType === 'email' && <Search size={18} />}
+                  {scanType === 'sms' && <MessageCircle size={18} />}
+                  {scanType === 'url' && <LinkIcon size={18} />}
+                  {(scanType === 'phone' || scanType === 'name' || scanType === 'username') && <UserIcon size={18} />}
+                  {scanType === 'company' && <Activity size={18} />}
+                  {scanType === 'domain' && <Globe size={18} />}
+                </div>
+                <input 
+                  type="text" 
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && isValidFormat && input && handleScan()}
+                  placeholder={scanType === 'phishing' ? "Paste suspicious email content..." : scanType === 'url' ? "Paste suspicious URL to analyze for phishing & malware..." : scanType === 'email' ? "Enter emails to check leaks & public records (comma-separated)..." : scanType === 'phone' ? "Enter phone numbers (comma-separated)..." : scanType === 'name' ? "Enter full names (comma-separated)..." : scanType === 'company' ? "Enter company names (comma-separated)..." : scanType === 'username' ? "Enter usernames (comma-separated)..." : scanType === 'domain' ? "Enter domain names (comma-separated)..." : "Paste SMS content..."}
+                  className={cn("w-full bg-surface/50 border rounded-2xl py-4 pl-12 pr-12 text-sm focus:outline-none transition-colors", input && (scanType === 'url' || scanType === 'email') ? (isValidFormat ? "border-success focus:border-success" : "border-danger focus:border-danger text-danger") : (!isValidFormat && input ? "border-danger focus:border-danger text-danger" : "border-border focus:border-primary"))}
+                />
+                {input && (scanType === 'url' || scanType === 'email') && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                    {isValidFormat ? <CheckCircle2 size={18} className="text-success" /> : <AlertTriangle size={18} className="text-danger" />}
+                  </div>
+                )}
+              </div>
+              {!isValidFormat && input && (
+                <p className="text-xs text-danger -mt-2 ml-4">{formatError}</p>
+              )}
+              </>
+            )}
+        
+        {scanType !== 'phishing' && scanType !== 'sms' && scanType !== 'url' && scanType !== 'file' && scanType !== 'antivirus' && (
+          <div className="space-y-4 mb-4">
+            <div className="flex items-center justify-between pl-2 pr-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#00E5FF]">Advanced Search Filters</span>
+              <button 
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="text-xs text-[#00E5FF] hover:text-[#00E5FF]/80 transition-colors uppercase tracking-widest flex items-center gap-1 font-bold"
+              >
+                {showAdvancedFilters ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                <ChevronDown size={14} className={cn("transition-transform", showAdvancedFilters && "rotate-180")} />
+              </button>
+            </div>
+            
+            {(showAdvancedFilters || countryFilter || cityFilter) && (
+              <div className="bg-surface/30 p-4 rounded-2xl border border-border space-y-4 animate-in slide-in-from-top-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={countryFilter}
+                      onChange={(e) => setCountryFilter(e.target.value)}
+                      placeholder="Country (Optional)"
+                      className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={cityFilter}
+                      onChange={(e) => setCityFilter(e.target.value)}
+                      placeholder="City (Optional)"
+                      className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                    />
+                  </div>
+                </div>
+                
+                {showAdvancedFilters && (
+                  <div className="space-y-4 pt-2 border-t border-border/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={advNameVariations}
+                          onChange={(e) => setAdvNameVariations(e.target.value)}
+                          placeholder="Name Variations / Aliases (e.g. John Doe, J. Doe)"
+                          className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={advAssociatedCompanies}
+                          onChange={(e) => setAdvAssociatedCompanies(e.target.value)}
+                          placeholder="Associated Companies (e.g. Acme Corp, Globex)"
+                          className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={advDigitalInconsistencies}
+                          onChange={(e) => setAdvDigitalInconsistencies(e.target.value)}
+                          placeholder="Known Digital Inconsistencies (e.g. duplicate LinkedIn profiles)"
+                          className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={advOtherKeywords}
+                          onChange={(e) => setAdvOtherKeywords(e.target.value)}
+                          placeholder="Other Keywords or Context (e.g. crypto scammer, fraud, marriage scandal)"
+                          className="w-full bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-4 bg-surface/30 p-2 rounded-2xl border border-border">
+          <span className="text-xs text-text-dim uppercase tracking-widest px-2 font-bold whitespace-nowrap">Scan Priority:</span>
+          <div className="flex w-full gap-2 overflow-x-auto no-scrollbar">
+            {([
+              { id: 'Low', label: 'Low', icon: <Clock size={14} />, color: 'text-success hover:bg-success/10 border-success/30' },
+              { id: 'Medium', label: 'Medium', icon: <Activity size={14} />, color: 'text-accent hover:bg-accent/10 border-accent/30' },
+              { id: 'High', label: 'High', icon: <AlertTriangle size={14} />, color: 'text-danger hover:bg-danger/10 border-danger/30' }
+            ] as const).map((u) => (
+              <button
+                key={u.id}
+                onClick={() => setUrgency(u.id as any)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider rounded-xl transition-all border",
+                  urgency === u.id ? `bg-surface shadow-[0_0_10px_rgba(255,255,255,0.05)] ${u.color}` : "border-transparent text-text-dim hover:text-text-main"
+                )}
+              >
+                {u.icon}
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          {scanning ? (
+            <button 
+              onClick={() => {
+                cancelRef.current = true;
+                setScanning(false);
+                setResult(null);
+                setScanProgress(0);
+              }}
+              className="flex-1 py-4 bg-danger/20 border border-danger disabled:opacity-50 text-danger hover:bg-danger hover:text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.2)] flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+            >
+              <XCircle size={20} /> Stop Scan
+            </button>
+          ) : (
+            <button 
+              onClick={() => handleScan()}
+              disabled={(!isValidFormat && scanType !== 'file' && scanType !== 'antivirus') || (!input && scanType !== 'file' && scanType !== 'antivirus') || (scanType === 'file' && !imageFile)}
+              className="flex-1 py-4 cyber-gradient disabled:opacity-50 text-white font-bold rounded-2xl shadow-[0_0_20px_rgba(0,229,255,0.4)] flex items-center justify-center gap-2 relative overflow-hidden transition-all hover:scale-[1.02]"
+            >
+              <div className="relative z-10 flex items-center gap-2">
+                <Scan size={20} />
+                {scanType === 'url' ? "Scan URL for Threats" : scanType === 'antivirus' ? "Start Antivirus Scan" : scanType === 'phishing' ? "Analyze Content" : scanType === 'file' ? "Scan File for Malware" : "Search intel"}
+              </div>
+            </button>
+          )}
+          <button
+            onClick={() => { setInput(''); setCountryFilter(''); setCityFilter(''); setResult(null); setImagePreview(null); setImageFile(null); setRecentSearches([]); logActivity('cleared_scan_cache'); }}
+            disabled={scanning || (!input && !result && !imageFile && recentSearches.length === 0)}
+            className="px-6 py-4 bg-surface border border-border disabled:opacity-50 text-text-main font-bold rounded-[20px] hover:bg-white/5 transition-colors"
+          >
+            Clear Caches
+          </button>
+        </div>
+        
+        {recentSearches.length > 0 && !scanning && !result && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <h4 className="text-xs font-semibold text-text-dim uppercase tracking-widest mb-3">Recent Searches</h4>
+            <div className="flex flex-wrap gap-2">
+              {recentSearches.map((search, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(search)}
+                  className="px-3 py-1.5 bg-surface border border-border text-xs rounded-lg hover:border-primary transition-colors text-text-dim hover:text-text-main flex items-center gap-1.5"
+                >
+                  <Clock size={12} />
+                  {search.length > 30 ? search.substring(0, 30) + '...' : search}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {scanning && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-8 flex flex-col justify-center gap-6"
+        >
+          <div className="flex justify-between items-end mb-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+                  <Search size={18} className="text-[#00E5FF]" />
+                </motion.div>
+                {scanType === 'url' ? 'Scanning URL & Verifying Reputation' : 
+                 scanType === 'antivirus' ? 'Performing Deep System Antivirus Scan' :
+                 scanType === 'file' ? 'Analyzing File Hash & Structure' : 
+                 scanType === 'phishing' ? 'Evaluating Phishing Threat' : 
+                 scanType === 'sms' ? 'Detecting Smishing Patterns' :
+                 'Generating Identity Credibility Checks'}
+                <span className="text-[#00E5FF] ml-2 text-xl">{Math.round(scanProgress)}%</span>
+              </h3>
+            </div>
+          </div>
+          
+          <div className="flex w-full gap-2 h-3 rounded-full overflow-hidden mb-2 relative bg-surface border border-border">
+            <motion.div
+              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-primary via-[#00E5FF] to-[#34D399] shadow-[0_0_15px_rgba(0,229,255,0.6)]"
+              initial={{ width: "0%" }}
+              animate={{ width: `${scanProgress}%` }}
+              transition={{ ease: "easeInOut", duration: 0.2 }}
+            />
+          </div>
+
+          <div className="space-y-0 mt-8 relative before:absolute before:inset-0 before:left-8 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border/50 before:to-transparent">
+            {currentPhases.map((phase, idx) => {
+               const isActive = currentPhaseIndex === idx;
+               const isCompleted = currentPhaseIndex > idx;
+               return (
+                  <div key={idx} className={cn(
+                    "relative flex items-center gap-6 transition-all duration-500 py-4",
+                    isCompleted ? "opacity-100" : isActive ? "opacity-100 scale-[1.02] origin-left" : "opacity-40 grayscale"
+                  )}>
+                    {/* Indicator Dot/Icon */}
+                    <div className={cn(
+                      "relative left-4 w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-500 shadow-xl z-10 box-content outline outline-4 outline-bg",
+                      isCompleted ? "bg-success text-bg ring-2 ring-success/50" : isActive ? "bg-[#00E5FF] text-bg ring-4 ring-[#00E5FF]/30 shadow-[0_0_20px_rgba(0,229,255,0.7)]" : "bg-surface border-2 border-border text-text-dim"
+                    )}>
+                      {isCompleted ? (
+                        <Check size={16} strokeWidth={3} />
+                      ) : isActive ? (
+                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                          <Loader size={16} strokeWidth={3} />
+                        </motion.div>
+                      ) : (
+                        <span className="text-xs font-bold">{idx + 1}</span>
+                      )}
+                    </div>
+                    {/* Connecting line fill (active state) */}
+                    {isCompleted && idx < currentPhases.length - 1 && (
+                      <motion.div 
+                        initial={{ height: 0 }}
+                        animate={{ height: '100%' }}
+                        className="absolute left-8 top-12 w-[2px] bg-gradient-to-b from-success to-[#00E5FF] z-0"
+                      />
+                    )}
+                    
+                    <div className={cn(
+                      "flex-1 p-4 ml-6 rounded-xl border transition-all duration-300",
+                      isCompleted ? "bg-success/5 border-success/30" : isActive ? "bg-[#00E5FF]/10 border-[#00E5FF]/50 shadow-[0_0_15px_rgba(0,229,255,0.15)]" : "bg-transparent border-transparent"
+                    )}>
+                      <div className="flex justify-between items-center">
+                        <span className={cn(
+                          "text-sm font-bold transition-colors duration-300 tracking-wide",
+                          isCompleted ? "text-success" : isActive ? "text-[#00E5FF] drop-shadow-[0_0_8px_rgba(0,229,255,0.8)]" : "text-text-dim"
+                        )}>
+                          {phase}
+                        </span>
+                        {isActive && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="text-[10px] bg-[#00E5FF] text-bg rounded-full uppercase font-black tracking-widest px-2 py-0.5"
+                          >
+                            In Progress
+                          </motion.div>
+                        )}
+                        {isCompleted && (
+                           <span className="text-[10px] text-success uppercase font-black tracking-widest px-2 py-0.5">
+                             Done
+                           </span>
+                        )}
+                      </div>
+                      
+                      {isActive && (
+                        <div className="mt-3 w-full bg-surface rounded-full h-1.5 overflow-hidden">
+                          <motion.div 
+                            className="bg-[#00E5FF] h-full shadow-[0_0_10px_rgba(0,229,255,0.8)]"
+                            initial={{ width: "0%" }}
+                            animate={{ width: "100%" }}
+                            transition={{ duration: 2, ease: "easeInOut", repeat: Infinity }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+               )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {draftResult && !scanning && !result && (
+        <ScanDraftViewer 
+          draftResult={draftResult} 
+          setDraftResult={setDraftResult} 
+          askAI={askAI} 
+          onFinalize={() => {
+             setResult(draftResult.finalResults);
+             setDraftResult(null);
+          }} 
+        />
+      )}
+
+      {result && !scanning && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-4">
+            <h3 className="text-xl font-bold">Investigation Results</h3>
+            {Array.isArray(result) && result.length > 1 && (
+              <div className="flex bg-surface/50 p-1 rounded-xl border border-border overflow-x-auto w-full sm:w-auto">
+                {['All', 'Safe', 'Suspicious', 'Malicious', 'Breaches'].map(f => (
+                  <button 
+                    key={f}
+                    onClick={() => setFilterVerdict(f)}
+                    className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap", filterVerdict === f ? "bg-primary text-white" : "text-text-dim hover:text-text-main")}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {(Array.isArray(result) ? result : [result]).filter((resItem: any) => {
+             if (filterVerdict === 'All') return true;
+             if (filterVerdict === 'Breaches') return resItem.type === 'breach' && resItem.found?.length > 0;
+             return resItem.verdict === filterVerdict || (filterVerdict === 'Safe' && resItem.verdict === 'Clean') || (filterVerdict === 'Clean' && resItem.verdict === 'Safe');
+          }).map((resItem: any, index: number) => (
+        <motion.div 
+          key={index}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "glass-card p-6 border-l-4 mb-4",
+            resItem.verdict === 'Safe' || resItem.verdict === 'Clean' || (resItem.type === 'breach' && resItem.found?.length === 0) ? "border-l-success" : resItem.verdict === 'Suspicious' ? "border-l-[#F59E0B]" : "border-l-danger"
+          )}
+        >
+          {Array.isArray(result) && <h3 className="font-bold text-lg mb-4 opacity-80 border-b border-border pb-2">Results for: {resItem.input || 'Unknown'}</h3>}
+          <div className="flex items-start gap-4 flex-col md:flex-row">
+            <div className={cn(
+              "p-3 rounded-2xl flex-shrink-0",
+              resItem.verdict === 'Safe' || resItem.verdict === 'Clean' || (resItem.type === 'breach' && resItem.found?.length === 0) ? "bg-success/10 text-success" : resItem.verdict === 'Suspicious' ? "bg-[#F59E0B]/10 text-[#F59E0B]" : "bg-danger/10 text-danger"
+            )}>
+              {resItem.verdict === 'Safe' || resItem.verdict === 'Clean' || (resItem.type === 'breach' && resItem.found?.length === 0) ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
+            </div>
+            <div className="space-y-2 flex-grow w-full">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <h4 className="font-bold text-xl uppercase tracking-wider">
+                  {resItem.type === 'breach' ? (resItem.found?.length > 0 ? "Breaches Found!" : "No Breaches Found") : resItem.verdict}
+                </h4>
+                {resItem.riskScore !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-widest text-text-dim">Risk Score</span>
+                    <div className={cn(
+                      "px-3 py-1 rounded-full text-sm font-bold text-white",
+                      resItem.riskScore < 30 ? "bg-success" : resItem.riskScore < 70 ? "bg-[#F59E0B]" : "bg-danger"
+                    )}>
+                      {resItem.riskScore}/100
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-text-main leading-relaxed">
+                {resItem.type === 'breach' 
+                  ? (resItem.found?.length > 0 ? `Your email was exposed in ${resItem.found.length} breaches. Change your passwords immediately.` : "Your email is currently safe from known breaches.")
+                  : resItem.analysis}
+              </p>
+              
+              {resItem.type !== 'breach' && resItem.redFlags && resItem.redFlags.length > 0 && (
+                <div className="mt-6">
+                  <h5 className="text-sm font-bold text-[#F59E0B] flex items-center gap-2 mb-4 uppercase tracking-wider">
+                    <AlertTriangle size={16} /> Threat Detailed Breakdown
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-3">
+                    {resItem.redFlags.map((flag: any, i: number) => (
+                      <div key={i} className="bg-[#F59E0B]/5 border border-[#F59E0B]/30 p-4 rounded-xl flex flex-col gap-2">
+                        <div className="font-semibold text-text-main flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
+                          {flag.indicator}
+                        </div>
+                        <div className="text-xs text-text-dim leading-relaxed bg-[#0F172A]/50 p-2 rounded-lg border border-border/50">
+                          {flag.advice}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {scanType === 'phone' && resItem.type !== 'breach' && (resItem.scamReports || resItem.maliciousAssociations || resItem.carrier || resItem.lineType) && (
+                <div className="mt-4 p-4 border border-danger/20 bg-danger/5 rounded-xl space-y-4">
+                   <h5 className="text-sm font-bold text-danger flex items-center gap-2 uppercase tracking-wider">
+                      <ShieldAlert size={16} /> Phone Security & Identity Analysis
+                   </h5>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-3">
+                      {(resItem.carrier) && (
+                        <div className="space-y-1">
+                           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Carrier</div>
+                           <div className="text-text-main">{resItem.carrier}</div>
+                        </div>
+                      )}
+                      {(resItem.lineType) && (
+                        <div className="space-y-1">
+                           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Line Type</div>
+                           <div className="text-text-main">{resItem.lineType}</div>
+                        </div>
+                      )}
+                      {(resItem.scamReports) && (
+                        <div className="space-y-1 col-span-1 md:col-span-2">
+                           <div className="text-xs text-danger uppercase tracking-wider font-bold animate-pulse">⚠️ Scam Reports / Robocalls Detected</div>
+                           <div className="text-danger font-semibold bg-danger/10 border border-danger/20 p-2 rounded">{resItem.scamReports}</div>
+                        </div>
+                      )}
+                      {(resItem.maliciousAssociations) && (
+                        <div className="space-y-1 col-span-1 md:col-span-2">
+                           <div className="text-xs text-danger uppercase tracking-wider font-bold animate-pulse">⚠️ Malicious Associations Detected</div>
+                           <div className="text-danger font-semibold bg-danger/10 border border-danger/20 p-2 rounded">{resItem.maliciousAssociations}</div>
+                        </div>
+                      )}
+                   </div>
+                </div>
+              )}
+
+              {scanType === 'url' && resItem.type !== 'breach' && (
+                <div className="mt-4 p-4 border border-[#3B82F6]/30 bg-[#3B82F6]/5 rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.15)] space-y-4">
+                   <h5 className="text-sm font-bold text-[#3B82F6] flex items-center gap-2 uppercase tracking-wider">
+                      <LinkIcon size={16} /> URL In-Depth Analysis
+                   </h5>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mt-3">
+                      {(resItem.domainReputation) && (
+                        <div className="space-y-1 bg-surface border border-border p-3 rounded-lg">
+                           <div className="text-[10px] text-text-dim uppercase tracking-wider font-bold mb-1">Domain Reputation</div>
+                           <div className="text-text-main font-medium">{resItem.domainReputation}</div>
+                        </div>
+                      )}
+                      {(resItem.sslStatus) && (
+                        <div className="space-y-1 bg-surface border border-border p-3 rounded-lg">
+                           <div className="text-[10px] text-text-dim uppercase tracking-wider font-bold mb-1">SSL Certificate Status</div>
+                           <div className="text-text-main font-medium">{resItem.sslStatus}</div>
+                        </div>
+                      )}
+                      {(resItem.redirectionPatterns) && (
+                        <div className="space-y-1 bg-surface border border-border p-3 rounded-lg">
+                           <div className="text-[10px] text-text-dim uppercase tracking-wider font-bold mb-1">Redirection Patterns</div>
+                           <div className="text-text-main w-full overflow-hidden text-ellipsis font-medium">{resItem.redirectionPatterns}</div>
+                        </div>
+                      )}
+                      {(!resItem.domainReputation && !resItem.sslStatus && !resItem.redirectionPatterns) && (
+                        <div className="text-text-dim italic text-xs col-span-3">Standard analysis performed. No specific advanced URL metrics were flagged.</div>
+                      )}
+                   </div>
+                </div>
+              )}
+
+              {currentPhases.length > 0 && resItem.type !== 'breach' && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h5 className="text-sm font-bold text-text-dim uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <Activity size={16} /> Scan Process Timeline
+                  </h5>
+                  <div className="relative border-l-2 border-[#10B981]/30 ml-4 space-y-6">
+                    {currentPhases.map((phase, idx) => (
+                      <div key={idx} className="relative pl-6">
+                        <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface border-2 border-[#10B981] flex items-center justify-center">
+                           <div className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                        </div>
+                        <div className="text-sm font-bold text-text-main">{phase}</div>
+                        <div className="text-xs text-text-dim mt-0.5 opacity-80">Phase completed successfully</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(scanType === 'email' || scanType === 'phishing') && resItem.type !== 'breach' && (
+                <div className="mt-4 p-4 border border-primary/20 bg-primary/5 rounded-xl space-y-4">
+                   <h5 className="text-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
+                      <Search size={16} /> Email Analysis Breakdown
+                   </h5>
+                   <div className="grid grid-cols-1 gap-4 text-sm mt-3">
+                      {(resItem.senderReputation) && (
+                        <div className="space-y-1">
+                           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Sender Reputation</div>
+                           <div className="text-text-main">{resItem.senderReputation}</div>
+                        </div>
+                      )}
+                      {(resItem.spfdkimdmarcRecords) && (
+                        <div className="space-y-1">
+                           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">SPF/DKIM/DMARC Records</div>
+                           <div className="text-text-main">{resItem.spfdkimdmarcRecords}</div>
+                        </div>
+                      )}
+                      {(resItem.suspiciousHeaders) && (
+                        <div className="space-y-1">
+                           <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Suspicious Headers</div>
+                           <div className="text-text-main w-full overflow-hidden text-ellipsis">{resItem.suspiciousHeaders}</div>
+                        </div>
+                      )}
+                      {(!resItem.senderReputation && !resItem.spfdkimdmarcRecords && !resItem.suspiciousHeaders) && (
+                        <div className="text-text-dim italic text-xs">Standard analysis performed. No specific advanced Email metrics were flagged.</div>
+                      )}
+                   </div>
+                </div>
+              )}
+              
+              
+              {resItem.verdict === 'Malicious' && resItem.type !== 'breach' && (
+                <div className="mt-4 p-4 border border-[#EF4444]/30 bg-[#EF4444]/5 rounded-xl space-y-3">
+                  <h5 className="text-sm font-bold text-[#EF4444] flex items-center gap-2">
+                    <ShieldAlert size={16} /> Immediate Actions Required
+                  </h5>
+                  <ul className="text-xs text-[#94A3B8] space-y-2 list-none m-0 p-0">
+                    {scanType === 'phishing' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Do not click the link, download attachments, or provide any personal information.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Close the page if you have already opened it and do not reply to the sender.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Mark the email/message as phishing or consider blocking the sender.</span></li>
+                      </>
+                    )}
+                    {scanType === 'url' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Do not visit the URL or download any files from it.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Check your system for malware if you have already clicked the link.</span></li>
+                      </>
+                    )}
+                    {scanType === 'sms' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Do not reply to the sender (not even "STOP").</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Block the number on your device.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Delete the message from your inbox.</span></li>
+                      </>
+                    )}
+                    {scanType === 'phone' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Do not answer incoming calls from this number.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Report the number to your carrier if they support spam reporting.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Block the number in your phone's call settings.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>If it matches a known scam, consider reporting it to authorities or a carrier blocking service.</span></li>
+                      </>
+                    )}
+                    {scanType === 'name' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Review your privacy settings on social media.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Consider requesting removal of your phone number from public directories.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Enable two-factor authentication on all accounts.</span></li>
+                      </>
+                    )}
+                    {scanType === 'email' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Change the password for this email address immediately.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Use a password manager and enable hardware 2FA if possible.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Check and secure accounts linked to this email address.</span></li>
+                      </>
+                    )}
+                    {scanType === 'company' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Exercise caution regarding investments or correspondence with this company.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Verify corporate details with official registries.</span></li>
+                      </>
+                    )}
+                    {scanType === 'username' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Assume accounts bearing this username might be compromised.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>If this is your username, secure your accounts immediately.</span></li>
+                      </>
+                    )}
+                    {scanType === 'domain' && (
+                      <>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Avoid visiting this domain or entering credentials on any related page.</span></li>
+                        <li className="flex items-start gap-2"><div className="w-1.5 h-1.5 rounded-full bg-[#EF4444] mt-1 shrink-0" /> <span>Block the domain at your network proxy or firewall.</span></li>
+                      </>
+                    )}
+                  </ul>
+                  <button onClick={() => setActiveScreen('ai')} className="mt-4 w-full py-2.5 bg-[#1E293B] border border-[#334155] text-xs font-semibold rounded-xl flex justify-center items-center gap-2 hover:bg-[#334155] transition-colors text-white">
+                    <GraduationCap size={16} className="text-[#8B5CF6]" /> Start Phishing AI Trainer
+                  </button>
+                </div>
+              )}
+
+              {resItem.type === 'breach' && resItem.found.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {resItem.found.map((b: any, i: number) => (
+                    <div key={i} className="flex justify-between text-xs bg-surface/50 p-2 rounded-lg border border-border">
+                      <span className="font-medium">{b.source}</span>
+                      <span className="text-text-dim">{b.date}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {resItem.type !== 'breach' && (scanType === 'phone' || scanType === 'name' || scanType === 'email' || scanType === 'sms' || scanType === 'company' || scanType === 'username' || scanType === 'domain') && resItem.candidates && resItem.candidates.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-widest flex items-center gap-2"><UserIcon size={16} className="text-[#10B981]" /> Potential Matches</h4>
+                  <div className="space-y-4">
+                    {resItem.candidates.map((candidate: any, cIdx: number) => {
+                      const candidateId = candidate.id || `${candidate.name}-${cIdx}`;
+                      const isLinkingActive = activeLinkSource?.id === candidateId;
+                      const isOtherEntityWhileLinking = activeLinkSource && !isLinkingActive;
+
+                      return (
+                      <div key={cIdx} className={cn("bg-surface/60 border p-4 rounded-xl shadow-lg space-y-3 relative overflow-hidden", isOtherEntityWhileLinking ? "border-primary shadow-[0_0_15px_rgba(139,92,246,0.3)]" : "border-[#10B981]/30")}>
+                        <div className="flex justify-between items-start gap-4 flex-col lg:flex-row">
+                          <div className="grid grid-cols-2 gap-4 flex-1">
+                            <div className="col-span-2 flex items-start gap-4">
+                              {candidate.photoUrl && (
+                                <img src={candidate.photoUrl} alt={candidate.name} className="w-16 h-16 rounded-xl object-cover border-2 border-primary/50 shadow-lg" referrerPolicy="no-referrer" />
+                              )}
+                              <div>
+                                <span className="block text-xs text-text-dim uppercase tracking-wider mb-1">Name</span>
+                                <span className="font-bold text-white text-lg flex flex-wrap items-center gap-2">
+                                  {candidate.name || 'Unknown'}
+                                  {isLinkingActive && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-widest animate-pulse border border-primary/50 flex items-center gap-1"><LinkIcon size={10} /> Linking Active</span>}
+                                </span>
+                                {(candidate.fullName || candidate.alias) && (
+                                  <div className="text-xs text-text-main mt-1 font-medium">
+                                    {[candidate.fullName ? `Full Name: ${candidate.fullName}` : null, candidate.alias ? `Alias: ${candidate.alias}` : null].filter(Boolean).join(' • ')}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {((candidate.emails && candidate.emails.length > 0) || (candidate.phoneNumbers && candidate.phoneNumbers.length > 0) || candidate.publicSpacesLinked?.length > 0) && (
+                              <div className="col-span-2">
+                                <span className="block text-xs text-text-dim uppercase tracking-wider mb-1">Contact & Public presence</span>
+                                {((candidate.emails && candidate.emails.length > 0) || (candidate.phoneNumbers && candidate.phoneNumbers.length > 0)) && (
+                                  <div className="text-xs text-[#3B82F6] font-medium">
+                                    {[candidate.emails?.length > 0 ? `Emails: ${candidate.emails.join(', ')}` : null, candidate.phoneNumbers?.length > 0 ? `Phone: ${candidate.phoneNumbers.join(', ')}` : null].filter(Boolean).join(' • ')}
+                                  </div>
+                                )}
+                                {candidate.publicSpacesLinked && candidate.publicSpacesLinked.length > 0 && (
+                                  <div className="text-xs text-[#F59E0B] font-medium mt-1">
+                                    Public Spaces: {candidate.publicSpacesLinked.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {(candidate.age || candidate.dateOfBirth || candidate.location || candidate.sex || candidate.maritalStatus || candidate.profession) && (
+                              <div className="col-span-2 md:col-span-1">
+                                <span className="block text-xs text-text-dim uppercase tracking-wider mb-1">Details</span>
+                                <span className="text-sm text-text-main flex flex-wrap gap-x-3 gap-y-1">
+                                  {candidate.dateOfBirth && <span>DOB: {candidate.dateOfBirth}</span>}
+                                  {candidate.age && <span>• {candidate.age} years old</span>}
+                                  {candidate.sex && <span>• {candidate.sex}</span>}
+                                  {candidate.profession && <span>• {candidate.profession}</span>}
+                                  {candidate.maritalStatus && <span>• {candidate.maritalStatus}</span>}
+                                  {candidate.location && <span>• {candidate.location}</span>}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 lg:ml-4 gap-2 flex-row lg:flex-col">
+                            {!activeLinkSource && (
+                              <button onClick={() => setActiveLinkSource({ id: candidateId, name: candidate.name || 'Unknown' })} className="text-xs bg-bg border border-border px-3 py-1.5 rounded-lg hover:border-primary transition-colors text-text-dim hover:text-white flex items-center gap-1">
+                                 <LinkIcon size={12} /> Select for Link
+                              </button>
+                            )}
+                            {isLinkingActive && (
+                              <button onClick={() => setActiveLinkSource(null)} className="text-xs bg-bg border border-border px-3 py-1.5 rounded-lg hover:border-danger transition-colors text-text-dim hover:text-white flex items-center gap-1">
+                                 Cancel Link
+                              </button>
+                            )}
+                            {isOtherEntityWhileLinking && (
+                              <button onClick={() => setShowLinkModal({ targetId: candidateId, targetName: candidate.name || 'Unknown' })} className="text-xs bg-primary text-white font-bold px-4 py-2 rounded-lg hover:bg-primary/80 transition-colors shadow-[0_0_10px_rgba(139,92,246,0.5)] flex items-center gap-1 shrink-0">
+                                <LinkIcon size={14} /> Link to {activeLinkSource.name}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {(candidate.characterCredibilityScore != null || candidate.characterRiskScore != null) && (
+                          <div className="grid grid-cols-2 gap-4 mt-2">
+                            {candidate.characterCredibilityScore != null && (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-text-dim uppercase tracking-wider">Credibility</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-bg rounded-full overflow-hidden">
+                                     <div className="h-full bg-success" style={{ width: `${candidate.characterCredibilityScore}%` }} />
+                                  </div>
+                                  <span className="text-xs font-bold text-success">{candidate.characterCredibilityScore}%</span>
+                                </div>
+                              </div>
+                            )}
+                            {candidate.characterRiskScore != null && (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-text-dim uppercase tracking-wider">Character Risk</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-bg rounded-full overflow-hidden">
+                                     <div className="h-full bg-danger" style={{ width: `${candidate.characterRiskScore}%` }} />
+                                  </div>
+                                  <span className="text-xs font-bold text-danger">{candidate.characterRiskScore}%</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {candidate.characterAssessment && (
+                          <ExpandableSection title="Character & Integrity Assessment" color="#3B82F6" icon={<GraduationCap size={14}/>}>
+                            <p className="text-sm text-[#3B82F6]/90">{candidate.characterAssessment}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.description && (
+                          <ExpandableSection title="Description / Summary" color="#94A3B8">
+                            <p className="text-sm text-[#94A3B8]">{candidate.description}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.history && (
+                          <ExpandableSection title="History & Background" color="#3B82F6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.history}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.workHistory && (
+                          <ExpandableSection title="Work History" color="#3B82F6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.workHistory}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.criminalRecords && (
+                          <ExpandableSection title="Criminal & Fraud Records" color="#EF4444" defaultOpen={true}>
+                            <p className="text-sm text-[#EF4444]/90">{candidate.criminalRecords}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.moralFidelity && (
+                          <ExpandableSection title="Moral Fidelity" color="#F59E0B">
+                            <p className="text-sm text-[#94A3B8]">{candidate.moralFidelity}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.sexTapeLeakages && (
+                          <ExpandableSection title="Sex Tape Leakages" color="#EF4444" defaultOpen={true}>
+                            <p className="text-sm text-[#94A3B8]">{candidate.sexTapeLeakages}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.sexualScandals && (
+                          <ExpandableSection title="Known Scandals" color="#EF4444" defaultOpen={true}>
+                            <p className="text-sm text-[#94A3B8]">{candidate.sexualScandals}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.relationshipHistory && (
+                          <ExpandableSection title="Relationship History" color="#8B5CF6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.relationshipHistory}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.previousMarriages && (
+                          <ExpandableSection title="Previous Marriages" color="#8B5CF6">
+                            <p className="text-sm text-[#94A3B8]">{candidate.previousMarriages}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {candidate.creditWorthiness && (
+                          <ExpandableSection title="Business & Credit Worthiness" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.creditWorthiness}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.financialCredibilityForLoans && (
+                          <ExpandableSection title="Financial Credibility for Loans" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.financialCredibilityForLoans}</p>
+                          </ExpandableSection>
+                        )}
+
+                        {candidate.characterCredibilityForBusiness && (
+                          <ExpandableSection title="Character Credibility for Business" color="#10B981">
+                            <p className="text-sm text-[#94A3B8]">{candidate.characterCredibilityForBusiness}</p>
+                          </ExpandableSection>
+                        )}
+                        
+                        {(candidate.digitalInconsistencies && candidate.digitalInconsistencies.length > 0) && (
+                          <ExpandableSection title="Digital Presence Inconsistencies" color="#F59E0B">
+                            <div className="space-y-3">
+                              {candidate.digitalInconsistencies.map((inc: any, idx: number) => (
+                                <div key={idx} className="bg-surface/40 p-3 rounded-lg border border-[#F59E0B]/20">
+                                  <p className="text-sm text-[#F59E0B]/90">{inc.description || inc}</p>
+                                  {(inc.source || inc.date || inc.reliabilityLevel) && (
+                                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-text-dim items-center">
+                                      {inc.reliabilityLevel && <span className={cn("px-1.5 py-0.5 rounded text-[10px] uppercase font-bold", inc.reliabilityLevel === 'High' ? "bg-success/10 text-success" : inc.reliabilityLevel === 'Medium' ? "bg-[#F59E0B]/10 text-[#F59E0B]" : "bg-danger/10 text-danger")}>{inc.reliabilityLevel}</span>}
+                                      {inc.date && <span>{inc.date}</span>}
+                                      {inc.source && <span className="truncate max-w-[200px] hover:text-[#00E5FF] transition-colors">{inc.source.startsWith('http') ? <a href={inc.source} target="_blank" rel="noopener noreferrer">{inc.source}</a> : inc.source}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        )}
+
+                        {(candidate.socialMediaProfiles && candidate.socialMediaProfiles.length > 0) ? (
+                          <ExpandableSection title="Publicly Available Social Media Profiles" color="#10B981" defaultOpen={true}>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {candidate.socialMediaProfiles.map((profile: any, idx: number) => (
+                                <div key={idx} className="p-3 bg-[#10B981]/5 border border-[#10B981]/20 rounded-lg flex flex-col gap-2">
+                                  <a href={profile.url.startsWith('http') ? profile.url : `https://${profile.url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[#10B981] font-medium hover:underline">
+                                    {profile.platform} <span className="text-xs ml-auto">External &nearr;</span>
+                                  </a>
+                                  {(profile.source || profile.date || profile.reliabilityLevel) && (
+                                    <div className="flex flex-wrap gap-2 text-[10px] text-text-dim">
+                                      {profile.reliabilityLevel && <span className={cn("px-1 rounded font-bold", profile.reliabilityLevel === 'High' ? "text-success" : profile.reliabilityLevel === 'Medium' ? "text-[#F59E0B]" : "text-danger")}>{profile.reliabilityLevel}</span>}
+                                      {profile.date && <span>• {profile.date}</span>}
+                                      {profile.source && <span className="truncate max-w-[120px]">• {profile.source.replace(/^https?:\/\//, '')}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        ) : null}
+
+                        {(candidate.associatedCompanies && candidate.associatedCompanies.length > 0) && (
+                          <ExpandableSection title="Associated Companies" color="#F59E0B" icon={<Briefcase size={14} />} defaultOpen={true}>
+                            <div className="space-y-2">
+                              {candidate.associatedCompanies.map((company: any, idx: number) => (
+                                <div key={idx} className="bg-surface/50 p-3 rounded-lg border border-border">
+                                  <div className="text-sm font-bold text-white mb-1">{company.name}</div>
+                                  <div className="text-xs text-[#F59E0B] mb-2">{company.relationship}</div>
+                                  {company.finding && <p className="text-xs text-text-main mb-2">{company.finding}</p>}
+                                  {(company.source || company.date || company.reliabilityLevel) && (
+                                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-dim border-t border-border/50 pt-2">
+                                      {company.reliabilityLevel && <span className={cn("px-1.5 py-0.5 border rounded uppercase", company.reliabilityLevel === 'High' ? "border-success/30 text-success" : company.reliabilityLevel === 'Medium' ? "border-[#F59E0B]/30 text-[#F59E0B]" : "border-danger/30 text-danger")}>{company.reliabilityLevel} Confidence</span>}
+                                      {company.date && <span>{company.date}</span>}
+                                      {company.source && <span className="truncate max-w-[150px]">{company.source.startsWith('http') ? <a href={company.source} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary">{company.source.replace(/^https?:\/\//, '')}</a> : company.source}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        )}
+
+                        {(candidate.sources && candidate.sources.length > 0) && (
+                          <ExpandableSection title="Public Sources of Information" color="#3B82F6" icon={<LinkIcon size={14} />} defaultOpen={true}>
+                            <div className="space-y-1.5">
+                              {candidate.sources.map((source: any, idx: number) => (
+                                <a href={source.url.startsWith('http') ? source.url : `https://${source.url}`} target="_blank" rel="noopener noreferrer" key={idx} className="block px-3 py-2 bg-surface text-text-main border border-border rounded-lg text-xs hover:bg-surface/80 hover:border-primary/50 hover:text-primary transition-all">
+                                  {source.title || source.url}
+                                </a>
+                              ))}
+                            </div>
+                          </ExpandableSection>
+                        )}
+
+                        <div className="pt-3 border-t border-border flex justify-end">
+                          <button 
+                            onClick={() => handleScan('name', candidate.name + (candidate.location ? ` in ${candidate.location}` : ''))}
+                            className="bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors border border-[#10B981]/30">
+                            <Search size={14} /> Scan Candidate
+                          </button>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {resItem.type !== 'breach' && scanType !== 'phishing' && resItem.leakages && resItem.leakages.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-widest flex items-center gap-2"><Globe size={16} className="text-[#F59E0B]" /> Known Leakages</h4>
+                  <div className="space-y-3">
+                    {resItem.leakages.map((leak: any, idx: number) => (
+                      <div key={idx} className="bg-surface/60 border border-[#F59E0B]/30 p-4 rounded-xl shadow-lg">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-bold text-sm text-[#F59E0B]">{leak.source || 'Unknown Source'}</span>
+                          <span className="text-xs text-text-dim/80 font-mono">{leak.date || 'Unknown Date'}</span>
+                        </div>
+                        <div className="text-xs text-text-dim mt-2">
+                          <strong className="text-white">Exposed Data:</strong> {leak.dataExposed ? leak.dataExposed.join(', ') : (scanType === 'phone' ? 'Phone Number' : scanType === 'email' ? 'Email Address' : 'Full Name, Phone Number, Email')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resItem.type !== 'breach' && scanType !== 'phishing' && resItem.websites && resItem.websites.length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-widest flex items-center gap-2"><LinkIcon size={16} className="text-[#3B82F6]" /> Exposed on Websites</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {resItem.websites.map((website: string, idx: number) => {
+                      const url = website.startsWith('http') ? website : `https://${website}`;
+                      return (
+                        <a href={url} target="_blank" rel="noopener noreferrer" key={idx} className="px-3 py-1.5 bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20 rounded-lg text-xs font-medium hover:bg-[#3B82F6]/20 transition-colors">
+                          {website}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <ScanTimeline result={resItem} scanType={scanType} />
+
+              <AIInsightBox data={resItem} contextKey={`scan-${resItem.type}-${resItem.input}`} askAI={askAI} />
+            </div>
+          </div>
+        </motion.div>
+      ))}
+        </div>
+      )}
+      </>
+     )}
+    </motion.div>
+  );
+}
+
+function AIAssistant({ askAI, logActivity, profile, setActiveScreen, alerts, activityLogs }: any) {
+  const [messages, setMessages] = useState<any[]>([
+    { role: 'ai', text: "Hello! I'm CyberAmour. How can I help secure your digital life today?" }
+  ]);
+  const [input, setInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typing, setTyping] = useState(false);
+  const [mode, setMode] = useState<'chat' | 'training'>('chat');
+  const [currentDomain, setCurrentDomain] = useState<string | null>(null);
+
+  const isPremium = profile?.isPremium;
+  const userMessagesCount = messages.filter(m => m.role === 'user').length;
+  const isLimitReached = !isPremium && userMessagesCount >= 5;
+
+  const handleSend = async (forcedInput?: string) => {
+    const userMsg = forcedInput || input;
+    if (!userMsg || isLimitReached) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setTyping(true);
+    logActivity('ai_query', { query: userMsg.substring(0, 20) + '...' });
+
+    const lowerMsg = userMsg.toLowerCase();
+    if (/(password|login|credential|vault|strong)/.test(lowerMsg)) setCurrentDomain('password');
+    else if (/(network|wifi|router|vpn|ip|scan)/.test(lowerMsg)) setCurrentDomain('network');
+    else if (/(phishing|email|spam|scam|link|train)/.test(lowerMsg)) setCurrentDomain('phishing');
+    else if (/(breach|leak|dark|hack)/.test(lowerMsg)) setCurrentDomain('darkweb');
+    else setCurrentDomain(null);
+    
+    const response = await askAI(userMsg);
+    setMessages(prev => [...prev, { role: 'ai', text: response }]);
+    setTyping(false);
+  };
+
+  const handleGenerateAdvice = async () => {
+    const userMsg = "Please provide proactive security advice based on my recent activity.";
+    if (isLimitReached) return;
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setTyping(true);
+
+    const context = `
+    Analyze the following recent activity and alerts to provide proactive security advice.
+    Return your advice formatted in markdown. Focus on clear, actionable advice.
+    At the end of your response, output a special JSON block enclosed in \`\`\`json containing recommended navigation actions.
+    The action should be one of: 'dashboard', 'scan', 'alerts', 'features', 'settings', 'darkweb', 'network'.
+    Example JSON:
+    [
+      { "label": "Review Scan Center", "action": "scan" },
+      { "label": "Check Alerts", "action": "alerts" }
+    ]
+
+    Recent Alerts: ${JSON.stringify(alerts?.slice(0, 3) || [])}
+    Recent Activity: ${JSON.stringify(activityLogs?.slice(0, 5) || [])}
+    `;
+
+    const response = await askAI(context);
+    
+    let textToDisplay = response;
+    let actions = [];
+    try {
+       const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+       if (jsonMatch) {
+         textToDisplay = response.replace(jsonMatch[0], '').trim();
+         actions = JSON.parse(jsonMatch[1]);
+       }
+    } catch(e) {
+       console.error("Failed to parse AI action suggestions", e);
+    }
+
+    setMessages(prev => [...prev, { role: 'ai', text: textToDisplay, actions }]);
+    setTyping(false);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex flex-col h-[calc(100vh-200px)] lg:h-[calc(100vh-300px)] relative"
+    >
+      <div className="flex flex-col md:flex-row items-center justify-between mb-4 gap-4 border-b border-border pb-4">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <MessageSquare size={20} className="text-primary" />
+            AI Assistant
+          </h2>
+          <div className="flex bg-surface p-1 rounded-lg border border-border">
+            <button 
+              onClick={() => setMode('chat')}
+              className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-colors", mode === 'chat' ? "bg-primary text-white" : "text-text-dim hover:text-white")}
+            >
+              Chat
+            </button>
+            <button 
+              onClick={() => setMode('training')}
+              className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-colors flex items-center gap-1.5", mode === 'training' ? "bg-accent text-white" : "text-text-dim hover:text-white")}
+            >
+              <GraduationCap size={14} /> Training
+            </button>
+          </div>
+        </div>
+
+        {mode === 'chat' && (
+          <div className="flex items-center gap-2 w-full md:w-auto md:justify-end overflow-x-auto">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-dim" />
+              <input
+                type="text"
+                placeholder="Search chat..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 px-3 py-1.5 focus:outline-none focus:border-primary border border-border bg-surface text-xs rounded-full w-full md:w-40 placeholder:text-text-dim/50 text-white"
+              />
+            </div>
+            <button 
+              onClick={handleGenerateAdvice}
+              disabled={isLimitReached || typing}
+              className="flex items-center gap-2 px-3 py-1.5 bg-success/10 text-success rounded-full text-xs font-bold hover:bg-success/20 transition-all disabled:opacity-50"
+            >
+              <ShieldAlert size={14} />
+              Generate Advice
+            </button>
+            <button 
+              onClick={() => setMessages([{ role: 'ai', text: "Hello! I'm CyberAmour. How can I help secure your digital life today?" }])}
+              className="flex items-center gap-2 px-3 py-1.5 bg-danger/10 text-danger rounded-full text-xs font-bold hover:bg-danger/20 transition-all"
+            >
+              <Trash2 size={14} />
+              Clear Chat
+            </button>
+          </div>
+        )}
+      </div>
+
+      {mode === 'training' ? (
+        <PhishingTrainingModule onClose={() => setMode('chat')} logActivity={logActivity} isEmbedded={true} />
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
+        {messages.filter(m => m.text.toLowerCase().includes(searchQuery.toLowerCase())).map((m, i) => (
+          <div key={i} className={cn("flex", m.role === 'user' ? "justify-end" : "justify-start")}>
+            <div className={cn(
+              "max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed",
+              m.role === 'user' ? "bg-primary text-white rounded-tr-none" : "bg-surface text-text-main rounded-tl-none border border-border"
+            )}>
+              <ReactMarkdown>{m.text}</ReactMarkdown>
+              {m.actions && m.actions.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2 pt-2 border-t border-border">
+                  {m.actions.map((action: any, aIdx: number) => (
+                    <button 
+                      key={aIdx} 
+                      onClick={() => setActiveScreen(action.action)}
+                      className="px-3 py-1.5 bg-success/10 text-success border border-success/30 hover:bg-success/20 rounded-lg transition-colors font-bold text-xs flex items-center gap-2"
+                    >
+                      <ArrowRight size={14} /> {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+        {typing && (
+          <div className="flex justify-start">
+            <div className="bg-surface p-4 rounded-2xl rounded-tl-none flex gap-1 border border-border">
+              <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1 }} className="w-1.5 h-1.5 bg-text-dim rounded-full" />
+              <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-text-dim rounded-full" />
+              <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-text-dim rounded-full" />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-4 flex flex-col gap-3">
+        {messages.length === 1 && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button onClick={() => handleSend("How do I identify a phishing email?")} className="px-3 py-1.5 bg-surface border border-border hover:border-primary rounded-full transition-colors text-text-dim hover:text-white">How to spot phishing?</button>
+            <button onClick={() => handleSend("What makes a password strong and secure?")} className="px-3 py-1.5 bg-surface border border-border hover:border-primary rounded-full transition-colors text-text-dim hover:text-white">Password best practices</button>
+            <button onClick={() => handleSend("How can I secure my social media accounts?")} className="px-3 py-1.5 bg-surface border border-border hover:border-primary rounded-full transition-colors text-text-dim hover:text-white">Secure social accounts</button>
+            <button onClick={() => handleSend("What should I do if my data is compromised?")} className="px-3 py-1.5 bg-surface border border-border hover:border-primary rounded-full transition-colors text-text-dim hover:text-white">Data breach response</button>
+          </div>
+        )}
+        {isLimitReached && (
+          <div className="p-3 bg-accent/10 border border-accent/20 rounded-xl text-[10px] text-accent font-bold text-center">
+            Free tier limit reached (5 messages). Upgrade for unlimited AI assistance.
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input 
+            type="text" 
+            value={input}
+            disabled={isLimitReached}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={isLimitReached ? "Limit reached..." : "Ask anything about security..."}
+            className="flex-1 bg-surface/50 border border-border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+          />
+          <button 
+            onClick={() => handleSend()}
+            disabled={isLimitReached}
+            className="p-3 bg-primary text-white rounded-2xl shadow-lg disabled:opacity-50"
+          >
+            <ChevronRight size={24} />
+          </button>
+        </div>
+        
+        {/* Domain-specific Action Buttons */}
+        {currentDomain === 'password' && (
+           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-1">
+             <button onClick={() => setActiveScreen('features')} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <Lock size={12} className="text-accent" /> Check Features
+             </button>
+             <button onClick={() => handleSend("Generate a strong and secure password for me")} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <Zap size={12} className="text-primary" /> Generate Strong Password
+             </button>
+           </motion.div>
+        )}
+        {currentDomain === 'network' && (
+           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-1">
+             <button onClick={() => setActiveScreen('network')} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <Network size={12} className="text-[#8B5CF6]" /> View Network Status
+             </button>
+             <button onClick={() => handleSend("How can I secure my home router?")} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <Shield size={12} className="text-success" /> Router Security Guide
+             </button>
+           </motion.div>
+        )}
+        {currentDomain === 'phishing' && (
+           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-1">
+             <button onClick={() => setMode('training')} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <GraduationCap size={12} className="text-accent" /> Start Phishing Training
+             </button>
+             <button onClick={() => handleSend("Can you tell me the common red flags of a phishing email?")} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <ShieldAlert size={12} className="text-danger" /> Spot Phishing Red Flags
+             </button>
+           </motion.div>
+        )}
+        {currentDomain === 'darkweb' && (
+           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-1">
+             <button onClick={() => setActiveScreen('darkweb')} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <Ghost size={12} className="text-danger" /> Scan Dark Web
+             </button>
+             <button onClick={() => handleSend("What should I do first if my password is part of a data breach?")} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
+               <AlertCircle size={12} className="text-accent" /> Breach Response Plan
+             </button>
+           </motion.div>
+        )}
+      </div>
+        </>
+      )}
+
+    </motion.div>
+  );
+}
+
+function PhishingTrainingModule({ onClose, logActivity, isEmbedded = false }: { onClose: () => void, logActivity: any, isEmbedded?: boolean }) {
+  const [step, setStep] = useState(0);
+  const [score, setScore] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+
+  const scenarios = [
+    {
+      title: "The Urgent Bank Alert",
+      type: "email",
+      sender: "Security@BankOfAmerica-Support.com",
+      subject: "URGENT: Your account has been locked",
+      content: "Dear Customer,\n\nYour account has been locked due to suspicious activity. Click the link below to verify your identity immediately or your funds will be frozen permanently.\n\nhttp://verify-bankofamerica.net/login\n\nSincerely,\nSecurity Team",
+      options: [
+        "Click the link to secure my funds immediately.",
+        "Check the sender's email address carefully and look for a lock icon.",
+        "Ignore the email and log in directly through the official bank website or app.",
+        "Reply to the email asking for more details."
+      ],
+      correct: 2,
+      explanation: "Official banks will never ask you to verify sensitive info via a direct link in an urgent email. Notice the fake sender domain and URL. Always use official channels."
+    },
+    {
+      title: "The Internal Helpdesk Request",
+      type: "email",
+      sender: "IT-Support@company-portal-update.com",
+      subject: "Action Required: Update your Outlook Password",
+      content: "Hi team,\n\nWe are migrating to a new email server. Please update your Outlook credentials today by 5 PM to avoid losing access to your inbox.\n\nUpdate here: https://outlook-company-update.com/auth\n\nThanks,\nIT Department",
+      options: [
+        "Click the link and submit my credentials as requested.",
+        "Forward the email to my personal email to do it later.",
+        "Report the email to IT via official internal channels without clicking the link.",
+        "Reply to the email to confirm if it's real."
+      ],
+      correct: 2,
+      explanation: "This is a targeted phishing attack (spear-phishing) pretending to be internal IT. The sender domain is not the official company domain. Always report suspicious internal emails."
+    },
+    {
+      title: "The Surprise Package",
+      type: "text",
+      content: "An SMS arrives: 'FedEx: Your package delivery failed. Please update your address at http://fedex-delivery-update.net/track to avoid a $50 storage fee.'",
+      options: [
+        "Click the link to update my address.",
+        "Call FedEx customer service using a number from their official website.",
+        "Pay the $50 fee to get it over with.",
+        "Forward the text to my friends to warn them."
+      ],
+      correct: 1,
+      explanation: "Smishing (SMS Phishing) often uses fake delivery alerts. The URL 'fedex-delivery-update.net' is not an official FedEx domain."
+    },
+    {
+      title: "The IT Support Call",
+      type: "text",
+      content: "A person calling themselves 'John from Microsoft Support' calls you, saying your computer is sending out viruses and he needs remote access to fix it.",
+      options: [
+        "Give him remote access so he can fix the problem.",
+        "Ask him for his employee ID and then give access.",
+        "Hang up. Tech companies like Microsoft do not make unsolicited support calls.",
+        "Ask him to wait while you back up your files."
+      ],
+      correct: 2,
+      explanation: "This is a classic tech support scam. Microsoft and other tech giants never call users proactively about 'viruses' on their machines."
+    },
+    {
+      title: "The Dark Web Alert",
+      type: "email",
+      sender: "Alerts@CyberAmour",
+      subject: "Action Required: Exposed Credentials Found",
+      content: "You receive a legitimate alert from your Dark Web Monitoring service that a password you use frequently was found in a database breach.\n\nWhat is the most appropriate first step to secure your accounts?",
+      options: [
+        "Ignore it since it's just one password.",
+        "Change the password immediately on the breached site and any other sites where you reused it.",
+        "Download the breached database to see what other information is there.",
+        "Delete your account on the breached website and wait."
+      ],
+      correct: 1,
+      explanation: "Credential stuffing is a common attack where hackers use exposed passwords on other services. You must immediately change the reused password everywhere and enable Two-Factor Authentication (2FA)."
+    },
+    {
+      title: "The Unknown Device on Network",
+      type: "text",
+      content: "Your home network scanner alerts you: 'Unknown Device Connected: Raspberry Pi - IP 192.168.1.105'. You don't own a Raspberry Pi.",
+      options: [
+        "Assume it's a neighbor's device and safely ignore it.",
+        "Immediately block the device's MAC address via your router and change the Wi-Fi password.",
+        "Try to connect to the device to see what it is.",
+        "Run an antivirus scan on your mobile phone."
+      ],
+      correct: 1,
+      explanation: "Rogue devices on your network can intercept traffic, perform man-in-the-middle attacks, or act as a backdoor. Immediate isolation by blocking the MAC address and changing credentials is required."
+    },
+    {
+      title: "GDPR: Fair & Transparent Processing",
+      type: "text",
+      content: "The GDPR protects Europeans' personal data and requires fair, lawful, and transparent data processing. What is a key requirement of this principle?",
+      options: [
+        "Organizations must encrypt all data to military standards.",
+        "Organizations must tell people how their data will be used, kept, and processed.",
+        "Organizations must delete data as soon as it is collected.",
+        "Organizations must only collect data from European citizens."
+      ],
+      correct: 1,
+      explanation: "Organizations must be transparent by telling people how their data will be used, kept, and processed. They must also allow individuals to view and correct their personal data."
+    },
+    {
+      title: "GDPR: Intended Use & Data Minimization",
+      type: "text",
+      content: "According to the GDPR's second key principle regarding the acquisition of personal data, how should an organization approach data collection?",
+      options: [
+        "Acquire as much data as possible for future, undetermined use.",
+        "Share collected data with third parties to maximize its utility.",
+        "Only acquire and process the data needed to fulfill their specific goals.",
+        "Collect data indefinitely without informing the users."
+      ],
+      correct: 2,
+      explanation: "Organizations must only acquire and treat personal data for its intended use and simply process the data needed to fulfill their goals."
+    },
+    {
+      title: "GDPR: Safeguarding Personal Data",
+      type: "text",
+      content: "The third key GDPR principle mandates the protection of personal data. Which of the following represents appropriate measures an organization should take?",
+      options: [
+        "Printing all personal data and storing it in physical cabinets.",
+        "Uploading all personal data to a public cloud storage bucket.",
+        "Using personal data only during regular business hours.",
+        "Implementing security safeguards like encryption and firewalls to protect personal data."
+      ],
+      correct: 3,
+      explanation: "Third, organizations must safeguard personal data. Organizations must protect personal data using encryption, firewalls, etc."
+    },
+    {
+      title: "GDPR: Storage Limitation",
+      type: "text",
+      content: "Under the fourth key principle of GDPR, what should an organization do with personal data once its initial purpose has been fulfilled?",
+      options: [
+        "Sell the data to a third-party marketing agency.",
+        "Store the data indefinitely in case it is needed again.",
+        "Archive the data in a publicly accessible database.",
+        "Dispose of or delete the data since it cannot be stored beyond the required duration."
+      ],
+      correct: 3,
+      explanation: "The fourth key principle highlights that organizations ought to dispose of personal data when its initial purpose has been fulfilled or deleted. Personal data cannot be stored by organizations beyond the required duration."
+    },
+    {
+      title: "GDPR: Data Subject Rights",
+      type: "text",
+      content: "The fifth basic GDPR principle relates to individual rights. Which of the following must organizations enable for data subjects?",
+      options: [
+        "The right to process other users' data.",
+        "The right to access, correct, and delete their personal data, and to object to processing.",
+        "The right to bypass organizational firewalls.",
+        "The right to indefinitely extend the storage of their data."
+      ],
+      correct: 1,
+      explanation: "Under the fifth basic principle, personal data can be accessed, corrected, and deleted by the individual. Organizations must also allow data subjects to object to processing."
+    }
+  ];
+
+  const handleAnswer = (index: number) => {
+    setSelectedAnswer(index);
+    const correct = index === scenarios[step].correct;
+    setIsCorrect(correct);
+    if (correct) setScore(prev => prev + 1);
+  };
+
+  const nextStep = () => {
+    if (step < scenarios.length - 1) {
+      setStep(prev => prev + 1);
+      setSelectedAnswer(null);
+      setIsCorrect(null);
+    } else {
+      logActivity('phishing_training_complete', { score });
+      setStep(99); // Completion state
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: isEmbedded ? 1 : 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: isEmbedded ? 1 : 0.95 }}
+      className={cn(
+        "flex flex-col flex-1",
+        isEmbedded ? "w-full" : "absolute inset-0 z-50 bg-bg p-6 rounded-2xl border border-border shadow-2xl"
+      )}
+    >
+      <div className={cn("flex justify-between items-center mb-6", isEmbedded && "mt-2")}>
+        <div className="flex items-center gap-2">
+          <GraduationCap className="text-primary" size={24} />
+          <h3 className="font-bold text-lg">Phishing Defense Academy</h3>
+        </div>
+        <div className="flex gap-4 items-center">
+          {step < scenarios.length && (
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  logActivity('phishing_training_next_question_clicked');
+                  nextStep();
+                }} 
+                className="text-xs text-text-dim hover:text-white uppercase tracking-widest px-2 font-bold flex flex-row items-center gap-1"
+              >
+                Next <ArrowRight size={14} />
+              </button>
+              <button 
+                onClick={() => {
+                  logActivity('phishing_training_skipped');
+                  setStep(99); 
+                }} 
+                className="text-xs text-text-dim hover:text-white uppercase tracking-widest px-2 font-bold"
+              >
+                Skip to End
+              </button>
+            </div>
+          )}
+          <button onClick={onClose} className="text-text-dim hover:text-text-main">
+            <XCircle size={24} />
+          </button>
+        </div>
+      </div>
+
+      {step < scenarios.length ? (
+        <div className="flex-1 flex flex-col">
+          <div className="mb-6">
+            <div className="flex justify-between text-xs font-bold text-text-dim mb-2 uppercase tracking-widest">
+              <span>Scenario {step + 1} of {scenarios.length}</span>
+              <span>Score: {score}</span>
+            </div>
+            <div className="w-full h-1.5 bg-surface rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${((step + 1) / scenarios.length) * 100}%` }}
+                className="h-full bg-primary"
+              />
+            </div>
+          </div>
+
+          <div className="glass-card p-6 mb-6 border-primary/20 bg-primary/5">
+            <h4 className="font-bold text-primary mb-4 flex items-center gap-2"><Eye size={18} /> {scenarios[step].title}</h4>
+            
+            {scenarios[step].type === 'email' ? (
+              <div className="bg-white text-black p-4 rounded-xl border border-border/50 text-sm font-sans shadow-inner">
+                <div className="flex border-b pb-3 mb-3 border-gray-200 text-xs">
+                  <div className="flex flex-col gap-1 w-full">
+                     <div className="flex justify-between">
+                       <span className="text-gray-500 font-medium w-16">From:</span>
+                       <span className="font-bold flex-1 text-gray-800 break-all">{scenarios[step].sender}</span>
+                     </div>
+                     <div className="flex justify-between">
+                       <span className="text-gray-500 font-medium w-16">Subject:</span>
+                       <span className="font-bold flex-1 text-gray-800">{scenarios[step].subject}</span>
+                     </div>
+                  </div>
+                </div>
+                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed break-words">{scenarios[step].content}</div>
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed italic bg-surface p-4 border border-border rounded-xl">"{scenarios[step].content}"</p>
+            )}
+          </div>
+
+          <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+            {scenarios[step].options.map((option, i) => (
+              <button
+                key={i}
+                disabled={selectedAnswer !== null}
+                onClick={() => handleAnswer(i)}
+                className={cn(
+                  "w-full p-4 text-left text-sm rounded-xl border transition-all flex justify-between items-center",
+                  selectedAnswer === null ? "bg-surface border-border hover:border-primary/50" : 
+                  i === scenarios[step].correct ? "bg-success/10 border-success text-success" :
+                  selectedAnswer === i ? "bg-danger/10 border-danger text-danger" : "bg-surface border-border opacity-50"
+                )}
+              >
+                <span>{option}</span>
+                {selectedAnswer !== null && i === scenarios[step].correct && <CheckCircle2 size={16} />}
+                {selectedAnswer === i && i !== scenarios[step].correct && <XCircle size={16} />}
+              </button>
+            ))}
+          </div>
+
+          {selectedAnswer !== null && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 bg-surface rounded-xl border border-border"
+            >
+              <div className="flex items-start gap-3">
+                <HelpCircle size={18} className="text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold mb-1">{isCorrect ? "Correct!" : "Not quite..."}</p>
+                  <p className="text-xs text-text-dim leading-relaxed">{scenarios[step].explanation}</p>
+                </div>
+              </div>
+              <button 
+                onClick={nextStep}
+                className="w-full mt-4 py-2 bg-primary text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2"
+              >
+                {step === scenarios.length - 1 ? "Finish Training" : "Next Scenario"}
+                <ArrowRight size={14} />
+              </button>
+            </motion.div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+          <div className="w-20 h-20 bg-success/20 rounded-full flex items-center justify-center mb-2">
+            <Trophy size={40} className="text-success" />
+          </div>
+          <div>
+            <h4 className="text-2xl font-bold mb-2">Training Complete!</h4>
+            <p className="text-text-dim text-sm max-w-xs mx-auto">
+              You've successfully completed the Phishing Defense Academy. Your final score is <span className="text-primary font-bold">{score}/{scenarios.length}</span>.
+            </p>
+          </div>
+          <div className="w-full space-y-3">
+            <button 
+              onClick={onClose}
+              className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20"
+            >
+              Return to Assistant
+            </button>
+            <button 
+              onClick={() => { setStep(0); setScore(0); setSelectedAnswer(null); setIsCorrect(null); }}
+              className="w-full py-4 text-text-dim font-bold hover:text-text-main transition-colors"
+            >
+              Retake Training
+            </button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+const HighlightedText = ({ text, highlight }: { text: string, highlight: string }) => {
+  if (!highlight.trim()) return <>{text}</>;
+  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escapedHighlight})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) => 
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <span key={i} className="bg-primary/20 text-primary font-bold rounded px-0.5">{part}</span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+};
+
+function KeyFeatures({ setActiveScreen }: any) {
+  const freeFeatures = [
+    { name: 'Basic Threat Scanning', desc: 'Scan URLs and files for known threats', icon: <Search size={24} className="text-secondary" /> },
+    { name: 'Security Score Dashboard', desc: 'Overview of your security posture', icon: <Shield size={24} className="text-primary" /> },
+    { name: 'AI Security Assistant (Limited)', desc: 'Basic chatbot guidance', icon: <MessageSquare size={24} className="text-text-dim" /> },
+    { name: 'Alerts Center', desc: 'Standard threat feeds', icon: <Bell size={24} className="text-[#F59E0B]" /> },
+    { name: 'Task Manager', desc: 'Manage your security tasks', icon: <CheckSquare size={24} className="text-text-dim" /> }
+  ];
+
+  const premiumFeatures = [
+    { name: 'Comprehensive Global Identity Search', desc: 'Deep AI-driven forensics into personas', icon: <UserSearch size={24} className="text-[#00E5FF]" /> },
+    { name: 'Advanced Dark Web Monitoring', desc: 'Constant surveillance and early detection', icon: <Ghost size={24} className="text-[#8B5CF6]" /> },
+    { name: 'AI Security Assistant (Unlimited)', desc: 'Advanced conversational AI & deep analysis', icon: <MessageSquare size={24} className="text-accent" /> },
+    { name: 'Secure VPN Connection', desc: 'Encrypted tunnel for safe browsing', icon: <Globe size={24} className="text-primary" /> },
+    { name: 'Pre-Report Interactive Feedback', desc: 'Refine raw scan findings interactively', icon: <Settings size={24} className="text-success" /> },
+    { name: 'Phone Optimizer', desc: 'AI-driven system tuning', icon: <Zap size={24} className="text-success" /> },
+    { name: 'Export Diagnostics', desc: 'PDF/CSV export of advanced hardware stats', icon: <Download size={24} className="text-danger" /> }
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold flex items-center gap-3">
+          <Star className="text-accent" /> Key Features & Capabilities
+        </h2>
+        <p className="text-text-dim text-sm">Explore the advanced capabilities of the CyberAmour platform.</p>
+        <div className="flex gap-4 mt-2">
+           <button onClick={() => setActiveScreen?.('guide')} className="px-4 py-2 bg-surface border border-success/30 text-success rounded-xl font-bold flex gap-2 items-center hover:bg-success/10 transition">
+             <BookOpen size={16} /> User Guide
+           </button>
+           <button onClick={() => setActiveScreen?.('pricing')} className="px-4 py-2 bg-primary text-white rounded-xl font-bold flex gap-2 items-center hover:bg-primary/90 transition shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+             <Crown size={16} /> Upgrade to Premium
+           </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+         <h3 className="text-lg font-bold flex items-center gap-2 text-white"><CheckSquare className="text-secondary" /> Standard Features (Free)</h3>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {freeFeatures.map((f, i) => (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                key={i} 
+                className="glass-card p-6 flex items-start gap-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-secondary/10 transition-all border border-border/50 hover:border-secondary/50 relative overflow-hidden group"
+              >
+                <div className="p-3 bg-surface/50 rounded-xl border border-border">
+                  {f.icon}
+                </div>
+                <div>
+                  <h3 className="font-bold text-white mb-1">{f.name}</h3>
+                  <p className="text-xs text-text-dim leading-relaxed">{f.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+         </div>
+      </div>
+
+      <div className="space-y-4">
+         <h3 className="text-lg font-bold flex items-center gap-2 text-primary"><Crown className="text-accent" /> Premium Features (CyberAmour Elite)</h3>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {premiumFeatures.map((f, i) => (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                key={i} 
+                className="glass-card p-6 flex items-start gap-4 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/20 transition-all border border-primary/30 bg-primary/5 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 blur-xl" />
+                <div className="p-3 bg-black/40 rounded-xl border border-primary/30">
+                  {f.icon}
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#00E5FF] mb-1">{f.name}</h3>
+                  <p className="text-xs text-text-dim leading-relaxed">{f.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+         </div>
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="mt-8 glass-card p-8 border border-border/50"
+      >
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <h3 className="text-xl font-bold mb-2">Connect with CyberAmour</h3>
+            <p className="text-sm text-text-dim">Follow us for the latest cyber threat intelligence and updates.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <a href="https://twitter.com/cyberamour" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-text-dim hover:text-primary transition-colors hover:-translate-y-1">
+              <div className="p-3 bg-surface/80 rounded-xl border border-border/50 hover:border-primary/50 transition-colors">
+                <Twitter size={20} />
+              </div>
+            </a>
+            <a href="https://linkedin.com/company/cyberamour" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-text-dim hover:text-[#0A66C2] transition-colors hover:-translate-y-1">
+              <div className="p-3 bg-surface/80 rounded-xl border border-border/50 hover:border-[#0A66C2]/50 transition-colors">
+                <Linkedin size={20} />
+              </div>
+            </a>
+            <a href="https://github.com/cyberamour" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-text-dim hover:text-white transition-colors hover:-translate-y-1">
+              <div className="p-3 bg-surface/80 rounded-xl border border-border/50 hover:border-white/50 transition-colors">
+                <Github size={20} />
+              </div>
+            </a>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function UserGuide({ setActiveScreen }: any) {
+  const guideSections = [
+    {
+      title: "Cyber Forensics & Scanning",
+      desc: "CyberAmour provides an extensive suite of AI-driven scanning capabilities. Whether it's investigating an IP address, validating an email, analyzing a file (hash), checking Crypto wallets, or dissecting a phishing SMS, our forensics module covers it all.",
+      features: [
+        "Select your scan type from the tabs.",
+        "Enter the target data (IP, File Hash, Domain, Text message).",
+        "Watch as CyberAmour AI investigates across OSINT and distinct intelligence feeds.",
+        "[PREMIUM] Review preliminary data in the Interactive Findings Viewer and correct misidentifications before creating the final report."
+      ],
+      icon: <Search size={24} className="text-[#00E5FF]" />
+    },
+    {
+      title: "Global Identity Search",
+      desc: "Perform comprehensive deep-dives into human personas. Discover footprints left across public platforms, dark web mentions, and linked digital identities.",
+      features: [
+        "Navigate to 'Cyber Forensics' and scroll to 'Global Identity Search'.",
+        "The system scans common platforms, checks forum registrations, and analyzes linked personas.",
+        "[PREMIUM] Results are processed by our elite Elite Intelligence Analysis, uncovering hidden relational intelligence."
+      ],
+      icon: <UserSearch size={24} className="text-accent" />
+    },
+    {
+      title: "Interactive Scan Pre-Report Insights",
+      desc: "During deep forensic analysis, the system identifies all related metadata. CyberAmour grants you the power to filter the data interactively.",
+      features: [
+        "A Draft Results Panel will appear before generating the final comprehensive report.",
+        "Use the chat interface to ask the AI to omit specific identities, filter false positives, or refocus the analysis.",
+        "[PREMIUM] Fully interact with the raw findings to ensure the highest fidelity intelligence output."
+      ],
+      icon: <Settings size={24} className="text-success" />
+    },
+    {
+      title: "Hardware Health & Diagnostics",
+      desc: "Monitor your local device's security and performance metrics in real-time.",
+      features: [
+        "View CPU, RAM, Fan speed, and Temperature.",
+        "[PREMIUM] Export your local device health diagnostics directly to a branded PDF, CSV, or TXT file for audit tracking."
+      ],
+      icon: <Smartphone size={24} className="text-[#3B82F6]" />
+    },
+    {
+      title: "CyberAmour AI Assistant",
+      desc: "Your personal, 24/7 incident response and threat analysis co-pilot.",
+      features: [
+        "Chat with the AI to summarize dense scan logs.",
+        "Ask security recommendations to secure networks.",
+        "Clear chats, regenerate advice, or use pre-populated forensic analysis questions."
+      ],
+      icon: <MessageSquare size={24} className="text-primary" />
+    }
+  ];
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 max-w-4xl mx-auto pb-10">
+      <div className="text-center py-10 bg-[url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=2670&ixlib=rb-4.0.3')] bg-cover bg-center rounded-2xl relative overflow-hidden border border-[#00E5FF]/20 shadow-[0_0_30px_rgba(0,229,255,0.1)]">
+        <div className="absolute inset-0 bg-bg/90 backdrop-blur-sm" />
+        <div className="relative z-10 px-6">
+          <BookOpen size={48} className="text-success mx-auto mb-4 drop-shadow-[0_0_15px_rgba(74,222,128,0.5)]" />
+          <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight">CyberAmour User Guide & Walkthrough</h2>
+          <p className="text-text-dim text-sm max-w-lg mx-auto">Master advanced threat modeling and forensics capabilities with our step-by-step visual demonstration guide.</p>
+        </div>
+      </div>
+
+      <div className="space-y-8 mt-6">
+        {guideSections.map((section, i) => (
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }} 
+            whileInView={{ opacity: 1, x: 0 }} 
+            viewport={{ once: true }}
+            transition={{ delay: i * 0.1 }}
+            key={i} 
+            className="glass-card p-6 border border-border/50 flex flex-col md:flex-row gap-6"
+          >
+            <div className="shrink-0 pt-2">
+              <div className="w-14 h-14 rounded-2xl bg-surface/80 border border-border flex items-center justify-center">
+                 {section.icon}
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-white mb-2">{section.title}</h3>
+              <p className="text-sm text-text-dim mb-4 leading-relaxed">{section.desc}</p>
+              
+              <div className="bg-black/30 rounded-xl p-4 border border-white/5 space-y-3">
+                 <h4 className="text-xs font-bold uppercase tracking-widest text-text-main flex items-center gap-2"><PlayCircle size={14} /> How it works:</h4>
+                 <ul className="space-y-2">
+                   {section.features.map((feature, j) => {
+                     const isPremium = feature.includes("[PREMIUM]");
+                     return (
+                       <li key={j} className="text-sm text-text-main flex items-start gap-2">
+                         {isPremium ? <Crown size={14} className="text-primary shrink-0 mt-0.5" /> : <div className="w-1.5 h-1.5 rounded-full bg-text-dim shrink-0 mt-2" />}
+                         <span className={isPremium ? "text-[#A78BFA] font-medium" : ""}>
+                           {feature.replace("[PREMIUM]", "").trim()}
+                           {isPremium && <span className="ml-2 text-[9px] uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded border border-primary/30">Premium Function</span>}
+                         </span>
+                       </li>
+                     );
+                   })}
+                 </ul>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+      
+      <div className="glass-card p-8 text-center border-border/50 border relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px]" />
+        <h3 className="text-xl font-bold mb-3">Ready to unleash full potential?</h3>
+        <p className="text-sm text-text-dim max-w-md mx-auto mb-6">Upgrade to CyberAmour Elite to unlock interactive feedback, global identity tracking, API limits extensions, and comprehensive diagnostics exporting.</p>
+        <button onClick={() => setActiveScreen?.('pricing')} className="px-6 py-3 bg-primary text-white rounded-xl shadow-[0_0_15px_rgba(139,92,246,0.3)] font-bold tracking-wide hover:bg-primary/90 transition-colors mx-auto flex items-center gap-2">
+          <Crown size={18} /> View Premium Plans
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function Alerts({ alerts, profile, setActiveScreen }: any) {
+  const isPremium = profile?.isPremium;
+  const displayAlerts = isPremium ? alerts : alerts.slice(0, 3);
+
+  const getActionForAlert = (alert: any) => {
+    const content = (alert.title + " " + alert.message).toLowerCase();
+    if (content.includes("identity") || content.includes("lookup") || content.includes("person")) {
+      return { screen: 'scan', label: 'Open Cyber Forensics', icon: <Search size={14} className="mr-1.5" /> };
+    }
+    if (content.includes("dark web") || content.includes("breach") || content.includes("leak")) {
+      return { screen: 'darkweb', label: 'Open Dark Web Monitor', icon: <Ghost size={14} className="mr-1.5" /> };
+    }
+    if (content.includes("scan") || content.includes("phishing") || content.includes("url") || content.includes("forensics")) {
+      return { screen: 'scan', label: 'Open Cyber Forensics', icon: <Search size={14} className="mr-1.5" /> };
+    }
+    if (content.includes("network") || content.includes("wifi") || content.includes("transaction") || content.includes("device") || content.includes("anomal")) {
+      return { screen: 'network', label: 'Open Network & Device', icon: <Network size={14} className="mr-1.5" /> };
+    }
+    if (content.includes("task") || content.includes("action") || content.includes("to-do")) {
+      return { screen: 'tasks', label: 'Open Task Manager', icon: <CheckSquare size={14} className="mr-1.5" /> };
+    }
+    if (content.includes("setting") || content.includes("password") || content.includes("authentication") || content.includes("2fa")) {
+      return { screen: 'settings', label: 'Open Settings', icon: <Settings size={14} className="mr-1.5" /> };
+    }
+    return null;
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Security Alerts</h2>
+        {!isPremium && alerts.length > 3 && (
+          <span className="text-[10px] font-bold text-accent bg-accent/10 px-2 py-1 rounded">Limited to 3 alerts (Free)</span>
+        )}
+      </div>
+      
+      <div className="space-y-4">
+        {displayAlerts.length === 0 ? (
+          <div className="text-center py-12 text-text-dim italic">No new alerts. You're safe!</div>
+        ) : (
+          displayAlerts.map((alert: any) => {
+            const action = getActionForAlert(alert);
+            return (
+              <div key={alert.id} className={cn(
+                "glass-card p-5 border-l-4",
+                alert.severity === 'critical' ? "border-l-danger" : alert.severity === 'warning' ? "border-l-accent" : "border-l-secondary"
+              )}>
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold">{alert.title}</h4>
+                  <span className="text-[10px] text-text-dim">{new Date(alert.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="text-sm text-text-dim leading-relaxed">{alert.message}</p>
+                {action && (
+                  <div className="mt-4 flex justify-end">
+                    <button 
+                      onClick={() => setActiveScreen(action.screen)}
+                      className="text-xs bg-surface/50 border border-border px-3 py-1.5 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors flex items-center font-bold"
+                    >
+                      {action.icon}
+                      {action.label}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function SettingsScreen({ profile, logout, updateUserPreferences, changePassword, isDarkMode, setIsDarkMode, generate2FA, verify2FA, enable2FA, disable2FA, updateLogRetention, clearOldLogs, logActivity, setActiveScreen, toggleAutoMonitoring }: any) {
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [showSecurityPrefs, setShowSecurityPrefs] = useState(false);
+  const [twoFactorData, setTwoFactorData] = useState<any>(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [error, setError] = useState('');
+  const [isVpnEnabled, setIsVpnEnabled] = useState(false);
+  const [passwordToTest, setPasswordToTest] = useState('');
+
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
+  const [displayName, setDisplayName] = useState(profile?.displayName || '');
+  const [newPassword, setNewPassword] = useState('');
+  const [notifyAlerts, setNotifyAlerts] = useState(profile?.notificationPrefs?.alerts ?? true);
+  const [notifyBreaches, setNotifyBreaches] = useState(profile?.notificationPrefs?.breaches ?? true);
+  const [notifySecurity, setNotifySecurity] = useState(profile?.notificationPrefs?.security ?? true);
+
+  const calculatePasswordStrength = (pwd: string) => {
+    let score = 0;
+    if (pwd.length > 8) score += 1;
+    if (/[A-Z]/.test(pwd)) score += 1;
+    if (/[a-z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+    
+    if (score <= 2) return { label: 'Weak', color: 'bg-danger text-danger', percent: 25 };
+    if (score === 3) return { label: 'Fair', color: 'bg-accent text-accent', percent: 50 };
+    if (score === 4) return { label: 'Good', color: 'bg-secondary text-secondary', percent: 75 };
+    return { label: 'Strong', color: 'bg-success text-success', percent: 100 };
+  };
+
+  const handleStartSetup = () => {
+    const data = generate2FA();
+    setTwoFactorData(data);
+    setShow2FASetup(true);
+    logActivity('2fa_setup_started');
+  };
+
+  const handleConfirmEnable = async () => {
+    if (verify2FA(verificationCode, twoFactorData.secret)) {
+      await enable2FA(twoFactorData.secret);
+      setShow2FASetup(false);
+      setTwoFactorData(null);
+      setVerificationCode('');
+      setError('');
+      logActivity('2fa_enabled');
+    } else {
+      setError('Invalid verification code. Please try again.');
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    await disable2FA();
+    logActivity('2fa_disabled');
+  };
+
+  const [showSettingsDownloadQR, setShowSettingsDownloadQR] = useState(false);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6"
+    >
+      <h2 className="text-2xl font-bold">Settings</h2>
+      
+      <div className="glass-card p-6 space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+              <UserIcon size={32} className="text-primary" />
+            </div>
+            <div>
+              <div className="font-bold text-lg">{profile?.displayName || "Cyber User"}</div>
+              <div className="text-sm text-text-dim">{profile?.email}</div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setShowSettingsDownloadQR(true)} className="px-3 py-1 bg-surface text-xs font-bold border border-border rounded-lg hover:bg-primary/20 hover:text-primary transition-all flex items-center gap-1">
+              <QrCode size={14} /> Get App
+            </button>
+            <button onClick={() => setShowProfileEdit(true)} className="px-3 py-1 bg-surface text-xs font-bold border border-border rounded-lg hover:bg-primary/20 hover:text-primary transition-all">
+              Edit
+            </button>
+          </div>
+        </div>
+
+        {showSettingsDownloadQR && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 p-4 border border-primary/20 rounded-xl bg-surface/50 text-center">
+             <h3 className="font-bold text-lg mb-2">Download CyberAmour Mobile</h3>
+             <p className="text-sm text-text-dim mb-4 max-w-sm mx-auto">Scan this QR code with your mobile device to open & save the CyberAmour app on the go.</p>
+             <div className="bg-white p-4 rounded-xl inline-block">
+               <QRCodeSVG value={window.location.origin + window.location.pathname} size={200} />
+             </div>
+             <div className="mt-4">
+               <button onClick={() => setShowSettingsDownloadQR(false)} className="text-xs text-text-dim hover:text-white">Close</button>
+             </div>
+          </motion.div>
+        )}
+
+        <div className="space-y-2">
+          <div 
+            onClick={() => setActiveScreen('pricing')}
+            className="flex justify-between items-center p-4 bg-surface/30 rounded-2xl border border-border hover:border-primary cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Zap size={18} className="text-accent" />
+              <span className="text-sm font-medium">Premium Membership</span>
+            </div>
+            <span className="text-xs font-bold text-accent uppercase tracking-widest">
+              {profile?.subscriptionTier && profile.subscriptionTier !== 'free' ? 'Manage' : 'Upgrade'}
+            </span>
+          </div>
+
+          <div 
+            onClick={() => {
+              if (profile?.isPremium) {
+                setIsVpnEnabled(!isVpnEnabled);
+              } else {
+                setActiveScreen('pricing');
+              }
+            }}
+            className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border"
+          >
+            <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
+              <Globe size={18} className={isVpnEnabled ? "text-primary" : ""} />
+              <span className="text-sm font-medium">Secure VPN Connection</span>
+              {!profile?.isPremium && (
+                <span className="text-[8px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded ml-2 uppercase tracking-widest">Premium</span>
+              )}
+            </div>
+            <div className={cn(
+              "w-10 h-5 rounded-full relative transition-colors shadow-inner flex-shrink-0",
+              isVpnEnabled ? "bg-primary" : "bg-text-dim/30"
+            )}>
+              <div 
+                className={cn(
+                  "absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300",
+                  isVpnEnabled ? "translate-x-[20px]" : "translate-x-[2px]"
+                )}
+              />
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border"
+          >
+            <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
+              {isDarkMode ? <Moon size={18} /> : <Sun size={18} />}
+              <span className="text-sm font-medium">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
+            </div>
+            <div className={cn(
+              "w-10 h-5 rounded-full relative transition-colors",
+              isDarkMode ? "bg-primary" : "bg-text-dim/30"
+            )}>
+              <motion.div 
+                animate={{ x: isDarkMode ? 20 : 2 }}
+                className="absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm"
+              />
+            </div>
+          </div>
+
+          <div 
+            onClick={() => toggleAutoMonitoring()}
+            className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border"
+          >
+            <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
+              <Network size={18} className={profile?.isAutoMonitoringEnabled ? "text-primary" : ""} />
+              <span className="text-sm font-medium">No-Root Firewall (Auto Monitoring)</span>
+            </div>
+            <div className={cn(
+              "w-10 h-5 rounded-full relative transition-colors",
+              profile?.isAutoMonitoringEnabled ? "bg-primary" : "bg-text-dim/30"
+            )}>
+              <motion.div 
+                animate={{ x: profile?.isAutoMonitoringEnabled ? 20 : 2 }}
+                className="absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* 2FA Toggle */}
+          <div className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border">
+            <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
+              <Lock size={18} />
+              <span className="text-sm font-medium">Two-Factor Authentication</span>
+            </div>
+            <button 
+              onClick={profile?.is2FAEnabled ? handleDisable2FA : handleStartSetup}
+              className={cn(
+                "text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border",
+                profile?.is2FAEnabled ? "border-success text-success bg-success/10" : "border-primary text-primary bg-primary/10"
+              )}
+            >
+              {profile?.is2FAEnabled ? 'Enabled' : 'Setup'}
+            </button>
+          </div>
+
+          <SettingsItem icon={<Shield size={18} />} label="Security Preferences" onClick={() => setShowSecurityPrefs(true)} />
+          <SettingsItem icon={<Bell size={18} />} label="Notification Settings" onClick={() => setShowNotificationPrefs(true)} />
+          <SettingsItem icon={<Lock size={18} />} label="Privacy Policy" />
+        </div>
+
+        <button 
+          onClick={() => {
+            import('./utils/sounds').then(s => s.playClickSound());
+            logout();
+          }}
+          className="w-full py-4 flex items-center justify-center gap-2 text-danger font-bold hover:bg-danger/10 rounded-2xl transition-all"
+        >
+          <LogOut size={20} />
+          Sign Out
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {show2FASetup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-bg/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-8 max-w-sm w-full space-y-6 shadow-2xl"
+            >
+              <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold">Setup 2FA</h3>
+                <p className="text-xs text-text-dim">Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+              </div>
+
+              <div className="flex flex-col items-center gap-4">
+                <div className="bg-white p-4 rounded-2xl">
+                  <QRCodeSVG value={twoFactorData?.otpauth} size={180} />
+                </div>
+                <div className="text-center w-full bg-surface/50 p-3 rounded-xl border border-border">
+                  <p className="text-[10px] text-text-dim uppercase tracking-widest font-bold mb-1.5">Or enter secret key manually</p>
+                  <code className="text-lg font-mono bg-bg px-3 py-1.5 rounded-lg select-all text-primary block break-all">{twoFactorData?.secret}</code>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-text-dim uppercase tracking-widest font-bold">Verification Code</label>
+                  <input 
+                    type="text"
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    placeholder="000000"
+                    className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-center text-xl font-black tracking-[0.5em] focus:outline-none focus:border-primary"
+                  />
+                </div>
+                {error && <p className="text-xs text-danger text-center">{error}</p>}
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShow2FASetup(false)}
+                    className="flex-1 py-3 text-sm font-bold text-text-dim hover:text-text-main transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleConfirmEnable}
+                    className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg"
+                  >
+                    Verify & Enable
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showSecurityPrefs && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-bg/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-8 max-w-md w-full space-y-6 shadow-2xl bg-surface"
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold">Security Preferences</h3>
+                <button onClick={() => setShowSecurityPrefs(false)} className="text-text-dim hover:text-text-main">
+                  <Plus size={24} className="rotate-45" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="text-sm font-semibold text-text-main">Log Retention</div>
+                  <p className="text-xs text-text-dim">Automatically clear activity logs older than the selected period.</p>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => updateLogRetention(m)}
+                        className={cn(
+                          "flex-1 py-2 text-xs font-bold rounded-xl border transition-all",
+                          profile?.logRetentionMonths === m 
+                            ? "bg-primary border-primary text-white" 
+                            : "border-border text-text-dim hover:border-primary/50"
+                        )}
+                      >
+                        {m} {m === 1 ? 'Month' : 'Months'}
+                      </button>
+                    ))}
+                  </div>
+                  <button 
+                    onClick={clearOldLogs}
+                    className="w-full py-2 text-[10px] font-bold uppercase tracking-widest text-danger hover:bg-danger/10 rounded-xl transition-all"
+                  >
+                    Clear Old Logs Now
+                  </button>
+                </div>
+
+                <div className="pt-4 border-t border-border space-y-4">
+                  <div className="text-sm font-semibold text-text-main">Change Password</div>
+                  <div className="space-y-2">
+                    <input 
+                      type="password" 
+                      placeholder="New Password" 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
+                    />
+                    {newPassword.length > 0 && (
+                      <div className="w-full bg-bg rounded-full h-1.5 overflow-hidden">
+                        <div 
+                           className={cn("h-full transition-all", calculatePasswordStrength(newPassword).color.split(' ')[0])} 
+                           style={{ width: `${calculatePasswordStrength(newPassword).percent}%` }} 
+                        />
+                      </div>
+                    )}
+                    <button 
+                      onClick={async () => {
+                        if (newPassword && await changePassword(newPassword)) {
+                          setNewPassword('');
+                          setShowSecurityPrefs(false);
+                        }
+                      }}
+                      disabled={!newPassword || calculatePasswordStrength(newPassword).percent < 50}
+                      className="mt-2 w-full py-2 bg-primary/20 text-primary border border-primary/30 rounded-xl font-bold text-xs hover:bg-primary/30 transition-all disabled:opacity-50"
+                    >
+                      Update Password
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border space-y-4">
+                  <div className="text-sm font-semibold text-text-main">Security Sessions</div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs p-3 bg-bg/50 rounded-xl border border-border">
+                      <div>
+                        <div className="font-bold">Chrome on Windows</div>
+                        <div className="text-[10px] text-text-dim">192.168.1.45 • Active Now</div>
+                      </div>
+                      <span className="text-success font-bold">Current</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowSecurityPrefs(false)}
+                className="w-full py-3 bg-primary text-white font-bold rounded-xl"
+              >
+                Done
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {showProfileEdit && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-bg/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-8 max-w-sm w-full space-y-6 shadow-2xl bg-surface"
+            >
+              <h3 className="text-xl font-bold">Edit Profile</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs uppercase tracking-widest text-text-dim font-bold">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowProfileEdit(false)} className="flex-1 py-3 text-sm font-bold text-text-dim hover:text-text-main transition-colors">Cancel</button>
+                <button 
+                  onClick={async () => {
+                    await updateUserPreferences(displayName, null);
+                    setShowProfileEdit(false);
+                  }}
+                  className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg"
+                >Save</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showNotificationPrefs && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-bg/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-8 max-w-sm w-full space-y-6 shadow-2xl bg-surface"
+            >
+              <h3 className="text-xl font-bold">Notification Prefs</h3>
+              <div className="space-y-4">
+                <label className="flex items-center justify-between p-3 border border-border rounded-xl hover:border-primary cursor-pointer">
+                  <span className="text-sm font-medium">New Alerts</span>
+                  <input type="checkbox" checked={notifyAlerts} onChange={(e) => setNotifyAlerts(e.target.checked)} className="accent-primary" />
+                </label>
+                <label className="flex items-center justify-between p-3 border border-border rounded-xl hover:border-primary cursor-pointer">
+                  <span className="text-sm font-medium">Breach Scans</span>
+                  <input type="checkbox" checked={notifyBreaches} onChange={(e) => setNotifyBreaches(e.target.checked)} className="accent-primary" />
+                </label>
+                <label className="flex items-center justify-between p-3 border border-border rounded-xl hover:border-primary cursor-pointer">
+                  <span className="text-sm font-medium">Security Tips</span>
+                  <input type="checkbox" checked={notifySecurity} onChange={(e) => setNotifySecurity(e.target.checked)} className="accent-primary" />
+                </label>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowNotificationPrefs(false)} className="flex-1 py-3 text-sm font-bold text-text-dim hover:text-text-main transition-colors">Cancel</button>
+                <button 
+                  onClick={async () => {
+                    await updateUserPreferences(undefined, { alerts: notifyAlerts, breaches: notifyBreaches, security: notifySecurity });
+                    setShowNotificationPrefs(false);
+                  }}
+                  className="flex-1 py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg"
+                >Save</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="text-center space-y-1">
+        <CyberAmourLogo size={96} className="mx-auto mb-3 drop-shadow-[0_0_10px_rgba(0,229,255,0.2)]" />
+        <p className="text-[10px] text-text-dim uppercase tracking-[0.2em]">CyberAmour v1.0.0</p>
+        <p className="text-[10px] text-text-dim">Developed by Engineer and Software Developer - Tongai Godfrey Mapiye - Cyber Fortress Technologies.</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function TwoFactorVerify({ verify, logout }: { verify: (code: string) => boolean, logout: () => void }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+
+  const handleVerify = () => {
+    if (verify(code)) {
+      setError('');
+    } else {
+      setError('Invalid code. Access denied.');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-8 max-w-md w-full space-y-8 shadow-2xl text-center"
+      >
+        <div className="flex justify-center">
+          <div className="p-4 bg-primary/20 rounded-3xl border border-primary/30">
+            <Lock size={48} className="text-primary" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Two-Factor Authentication</h2>
+          <p className="text-text-dim text-sm">Enter the 6-digit code from your authenticator app to continue.</p>
+        </div>
+
+        <div className="space-y-4">
+          <input 
+            type="text"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleVerify()}
+            placeholder="000000"
+            className="w-full bg-surface border border-border rounded-2xl px-4 py-4 text-center text-3xl font-black tracking-[0.5em] focus:outline-none focus:border-primary"
+          />
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <button 
+            onClick={handleVerify}
+            className="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg shadow-primary/20"
+          >
+            Verify Identity
+          </button>
+          <button 
+            onClick={logout}
+            className="w-full py-2 text-text-dim hover:text-text-main text-xs font-medium"
+          >
+            Sign out and try another account
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function SettingsItem({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick?: () => void }) {
+  return (
+    <div 
+      onClick={onClick}
+      className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border"
+    >
+      <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
+        {icon}
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      <ChevronRight size={16} className="text-text-dim" />
+    </div>
+  );
+}
+
+function LinkModal({ targetName, onConfirm, onCancel }: { targetName: string, onConfirm: (type: string) => void, onCancel: () => void }) {
+  const types = ["Execution", "Persistence", "Traffic", "Modification", "Association"];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-md">
+      <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><LinkIcon size={18} className="text-primary"/> Link to {targetName}</h3>
+        <p className="text-sm text-text-dim mb-4">Select the relationship type:</p>
+        <div className="flex flex-col gap-2">
+          {types.map(t => (
+            <button key={t} onClick={() => onConfirm(t)} className="px-4 py-2 bg-surface text-text-main border border-border rounded-lg hover:bg-primary/20 hover:border-primary transition-colors text-left text-sm font-semibold">{t}</button>
+          ))}
+        </div>
+        <button onClick={onCancel} className="mt-4 w-full px-4 py-2 text-sm text-text-dim hover:text-white transition-colors">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function CaseMatrixVisualization({ linkages, activeLinkSource, setActiveLinkSource, setShowLinkModal }: any) {
+  const nodesMap = new Map();
+  linkages.forEach((l: any) => {
+    if (!nodesMap.has(l.sourceId)) nodesMap.set(l.sourceId, { id: l.sourceId, name: l.sourceName });
+    if (!nodesMap.has(l.targetId)) nodesMap.set(l.targetId, { id: l.targetId, name: l.targetName });
+  });
+  const nodes = Array.from(nodesMap.values());
+  const radius = 140;
+  const center = { x: 300, y: 200 };
+
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 600 400" className="absolute inset-0">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="32" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#8B5CF6" />
+        </marker>
+      </defs>
+      {linkages.map((l: any, i: number) => {
+        const sourceIndex = nodes.findIndex(n => n.id === l.sourceId);
+        const targetIndex = nodes.findIndex(n => n.id === l.targetId);
+        
+        const sourceAngle = (sourceIndex / nodes.length) * 2 * Math.PI - Math.PI/2;
+        const targetAngle = (targetIndex / nodes.length) * 2 * Math.PI - Math.PI/2;
+        
+        const sx = center.x + radius * Math.cos(sourceAngle);
+        const sy = center.y + radius * Math.sin(sourceAngle);
+        const tx = center.x + radius * Math.cos(targetAngle);
+        const ty = center.y + radius * Math.sin(targetAngle);
+        
+        const mx = (sx + tx) / 2;
+        const my = (sy + ty) / 2;
+
+        return (
+          <g key={i}>
+            <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="#8B5CF6" strokeWidth="2" strokeDasharray="4 4" markerEnd="url(#arrow)" />
+            <rect x={mx - 35} y={my - 12} width="70" height="20" rx="4" fill="#0F172A" stroke="#334155" strokeWidth="1" />
+            <text x={mx} y={my + 2} fill="#94A3B8" fontSize="10" textAnchor="middle" fontWeight="bold">{l.type}</text>
+          </g>
+        );
+      })}
+      
+      {nodes.map((node, i) => {
+        const angle = (i / nodes.length) * 2 * Math.PI - Math.PI/2;
+        const x = center.x + radius * Math.cos(angle);
+        const y = center.y + radius * Math.sin(angle);
+        const isActive = activeLinkSource?.id === node.id;
+        const isTargetMode = activeLinkSource && !isActive;
+        
+        return (
+          <g key={node.id} transform={`translate(${x},${y})`} onClick={() => {
+            if (isTargetMode) {
+               setShowLinkModal({ targetId: node.id, targetName: node.name });
+            } else if (!activeLinkSource) {
+               setActiveLinkSource(node);
+            } else {
+               setActiveLinkSource(null);
+            }
+          }} style={{cursor: 'pointer'}} className="transition-all hover:opacity-80">
+            <circle r="22" fill={isActive ? "#8B5CF6" : "#1E293B"} stroke={isActive ? "#fff" : isTargetMode ? "#10B981" : "#8B5CF6"} strokeWidth={isActive || isTargetMode ? "3" : "2"} className={isTargetMode ? "animate-pulse" : ""} />
+            <text y="40" fill={isActive ? "#fff" : "#94A3B8"} fontSize="12" textAnchor="middle" fontWeight="bold" className="capitalize">{node.name}</text>
+            {isActive && <text y="-30" fill="#8B5CF6" fontSize="10" textAnchor="middle" fontWeight="bold" className="uppercase tracking-widest">Active Link Source</text>}
+            {isTargetMode && <text y="-30" fill="#10B981" fontSize="10" textAnchor="middle" fontWeight="bold" className="uppercase tracking-widest">Click to Link</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, profile, activeLinkSource, setActiveLinkSource, setShowLinkModal, linkages, setActiveScreen }: any) {
+  const [packets, setPackets] = useState<any[]>([]);
+  const [selectedPacket, setSelectedPacket] = useState<any | null>(null);
+  const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [threats, setThreats] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isScanningNetwork, setIsScanningNetwork] = useState(false);
+  const [isScanningDevice, setIsScanningDevice] = useState(false);
+  const [isMonitoringFin, setIsMonitoringFin] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Real-time packet volume data
+  const [packetVolumeData, setPacketVolumeData] = useState<any[]>(
+    Array.from({ length: 20 }, (_, i) => ({
+      time: i,
+      incoming: Math.floor(Math.random() * 100) + 20,
+      outgoing: Math.floor(Math.random() * 80) + 10,
+    }))
+  );
+
+  useEffect(() => {
+    const volumeInterval = setInterval(() => {
+      setPacketVolumeData(prevData => {
+        const newData = [...prevData.slice(1)];
+        const lastTime = newData[newData.length - 1].time;
+        newData.push({
+          time: lastTime + 1,
+          incoming: Math.floor(Math.random() * 100) + 20,
+          outgoing: Math.floor(Math.random() * 80) + 10,
+        });
+        return newData;
+      });
+    }, 2000);
+
+    return () => clearInterval(volumeInterval);
+  }, []);
+
+  const handleNetworkScan = async () => {
+    import('./utils/sounds').then(s => s.playScanSound());
+    setIsScanningNetwork(true);
+    try {
+      const result = await scanNetwork();
+      setPackets(result.packets);
+      setAnomalies(result.anomalies);
+      if (result.anomalies && result.anomalies.length > 0) {
+        import('./utils/sounds').then(s => s.playErrorSound());
+      } else {
+        import('./utils/sounds').then(s => s.playSuccessSound());
+      }
+    } catch {
+      import('./utils/sounds').then(s => s.playErrorSound());
+    }
+    setIsScanningNetwork(false);
+  };
+
+  const handleDeviceScan = async () => {
+    import('./utils/sounds').then(s => s.playScanSound());
+    setIsScanningDevice(true);
+    setErrorMsg(null);
+    try {
+      const result = await scanDevice();
+      setThreats(result);
+      if (result && result.length > 0) {
+        import('./utils/sounds').then(s => s.playErrorSound());
+      } else {
+        import('./utils/sounds').then(s => s.playSuccessSound());
+      }
+    } catch (e: any) {
+      if (e.message === 'LIMIT_REACHED') {
+        setErrorMsg("You've used your 5 free virus scans. Upgrade to a subscription-based membership to access premium features.");
+      }
+      import('./utils/sounds').then(s => s.playErrorSound());
+    }
+    setIsScanningDevice(false);
+  };
+
+  const handleFinMonitor = async () => {
+    setIsMonitoringFin(true);
+    const result = await monitorTransactions();
+    setTransactions(result);
+    setIsMonitoringFin(false);
+  };
+
+  const handleQuarantine = (index: number) => {
+    const newThreats = [...threats];
+    newThreats.splice(index, 1);
+    setThreats(newThreats);
+    import('./utils/sounds').then(s => s.playSuccessSound());
+  };
+
+  const handleClean = (index: number) => {
+    const newThreats = [...threats];
+    newThreats.splice(index, 1);
+    setThreats(newThreats);
+    import('./utils/sounds').then(s => s.playSuccessSound());
+  };
+
+  const handleDelete = (index: number) => {
+    const newThreats = [...threats];
+    newThreats.splice(index, 1);
+    setThreats(newThreats);
+    import('./utils/sounds').then(s => s.playSuccessSound());
+  };
+
+  const handleRectifyAll = () => {
+    setThreats([]);
+    import('./utils/sounds').then(s => s.playSuccessSound());
+  };
+
+  useEffect(() => {
+    handleNetworkScan();
+    handleDeviceScan();
+    handleFinMonitor();
+  }, []);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Network & Device Shield</h2>
+          <p className="text-sm text-text-dim mt-1">Real-time packet filtering and malware protection.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="status-badge bg-success/20 text-success border-success/30">
+            <ShieldCheck size={14} className="mr-1" />
+            Active Protection
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Packet Volume Real-time Chart Section */}
+        <div className="glass-card p-6 space-y-6 lg:col-span-2">
+          <div className="flex items-center gap-3">
+             <Activity className="text-[#3B82F6]" size={24} />
+             <h3 className="text-xl font-bold">Real-time Packet Volume</h3>
+          </div>
+          <p className="text-sm text-text-dim">Tracking live incoming versus outgoing network packets over time.</p>
+          <div className="w-full h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={packetVolumeData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <RechartsLine type="monotone" dataKey="incoming" stroke="#3B82F6" strokeWidth={3} dot={false} isAnimationActive={false} name="Incoming Packets" />
+                <RechartsLine type="monotone" dataKey="outgoing" stroke="#10B981" strokeWidth={3} dot={false} isAnimationActive={false} name="Outgoing Packets" />
+                <CartesianGrid stroke="#334155" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="time" hide />
+                <YAxis stroke="#94A3B8" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1E293B', borderColor: '#334155', borderRadius: '8px' }}
+                  itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                  labelStyle={{ display: 'none' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Case Matrix Graph Section */}
+        <div className="glass-card p-6 space-y-6 lg:col-span-2">
+          <div className="flex items-center gap-3 justify-between">
+             <div className="flex items-center gap-3">
+                <Network className="text-primary" size={24} />
+                <h3 className="text-xl font-bold">Case Matrix: 2D Network Graph</h3>
+             </div>
+          </div>
+          <div className="relative w-full h-[400px] border border-border bg-surface/30 rounded-2xl overflow-hidden flex items-center justify-center">
+            {linkages && linkages.length > 0 ? (
+               <CaseMatrixVisualization linkages={linkages} activeLinkSource={activeLinkSource} setActiveLinkSource={setActiveLinkSource} setShowLinkModal={setShowLinkModal} />
+            ) : (
+               <div className="text-text-dim text-center space-y-2">
+                 <LinkIcon size={32} className="mx-auto text-primary/30" />
+                 <p className="text-sm font-bold">No active linkages detected.</p>
+                 <p className="text-xs">Establish relationships from the Cyber Forensics tab to populate the semantic network.</p>
+               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Packet Filtering Section */}
+        <div className="glass-card p-6 space-y-6 lg:col-span-2">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <Network className="text-primary" size={24} />
+                <h3 className="text-xl font-bold">Packet Filter & CyberAmour Analysis</h3>
+              </div>
+              <p className="text-xs text-text-dim mt-1">Deep packet inspection and simulated CyberAmour log ingestion.</p>
+            </div>
+            <button 
+              onClick={handleNetworkScan}
+              disabled={isScanningNetwork}
+              className="flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary hover:bg-primary/30 rounded-xl transition-all font-bold text-xs"
+            >
+              <RefreshCw size={14} className={cn(isScanningNetwork && "animate-spin")} /> Refetch Packets
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-2">
+                 <h4 className="text-sm font-bold uppercase tracking-widest text-[#00E5FF]">Wireshark Mode</h4>
+                 <span className="text-[10px] text-text-dim px-2 bg-surface rounded-full">Live Capture</span>
+              </div>
+              <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2 scrollbar-none font-mono text-[10px] bg-black/40 p-4 rounded-xl border border-border/50 relative">
+                <div className="grid grid-cols-5 gap-2 pb-2 border-b border-border text-text-dim uppercase font-bold sticky top-0 bg-black/40 backdrop-blur pb-2 z-10">
+                  <span>Source</span>
+                  <span>Dest</span>
+                  <span>Proto</span>
+                  <span>Size</span>
+                  <span>Status</span>
+                </div>
+            {packets.map((p) => (
+              <div 
+                key={p.id} 
+                onClick={() => setSelectedPacket(p)}
+                className="grid grid-cols-5 gap-2 py-2 border-b border-border/30 hover:bg-surface transition-colors cursor-pointer"
+              >
+                <span className="truncate">{p.source}</span>
+                <span className="truncate">{p.dest}</span>
+                <span className="text-primary">{p.protocol}</span>
+                <span>{p.size}</span>
+                <span className={cn(
+                  "font-bold",
+                  p.status === 'Safe' ? "text-success" : 
+                  p.status === 'SessionHijack' ? "text-danger animate-pulse" :
+                  p.status === 'Suspicious' ? "text-accent" : "text-danger"
+                )}>
+                  {p.status === 'SessionHijack' ? 'HIJACK ATTEMPT' : p.status}
+                </span>
+              </div>
+            ))}
+          </div>
+            </div>
+
+            <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                   <h4 className="text-sm font-bold uppercase tracking-widest text-[#4ADE80]">CyberAmour Log Analysis</h4>
+                   <span className="text-[10px] text-[#4ADE80] px-2 bg-[#4ADE80]/10 border border-[#4ADE80]/20 rounded">Forwarding Active</span>
+                </div>
+                <div className="space-y-2 h-[350px] overflow-y-auto pr-2 scrollbar-none font-mono text-[10px] bg-[#000000] p-4 rounded-xl border border-border/50">
+                  {packets.slice(0, 50).map((p, i) => (
+                    <div key={i} className="py-2 border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <div className="text-[9px] text-[#4ADE80]/70 mb-1">
+                        [{new Date(Date.now() - i * 15000).toISOString()}] [INFO] cyberamourd - idx=network sourcetype=stream:tcp
+                      </div>
+                      <div className={cn(
+                         "break-all text-white/90",
+                         p.status !== 'Safe' && "text-danger/90 font-bold"
+                      )}>
+                         src_ip="{p.source}" dest_ip="{p.dest}" protocol="{p.protocol}" bytes_in={p.size} action="{p.status === 'Safe' ? 'allowed' : 'blocked'}" {p.status !== 'Safe' ? `risk_factor="high" signature="Potential ${p.status} Traffic"` : 'risk_factor="low"'} src_port={Math.floor(Math.random() * 65000)} dest_port={p.protocol === 'HTTPS' ? 443 : 80}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <ShieldAlert size={20} className="text-danger" />
+              Network Threat Analysis
+            </h3>
+            <div className="space-y-3">
+              {anomalies.length === 0 ? (
+                <div className="p-4 text-center bg-success/5 border border-success/20 rounded-xl">
+                  <p className="text-xs text-success font-bold">No active network threats detected.</p>
+                </div>
+              ) : (
+                anomalies.map((a, i) => (
+                  <div key={i} className="p-4 bg-surface/50 border border-border/50 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-text-main">Source: {a.source}</span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                        a.status === 'Malicious' ? "bg-danger text-white" : "bg-accent text-bg"
+                      )}>
+                        {a.status === 'Malicious' ? 'High Risk' : 'Medium Risk'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-text-dim">
+                      {a.status === 'SessionHijack' 
+                        ? `AI Auto-Blocked a session hijacking attempt from ${a.source}. Unauthorized token extraction prevented.`
+                        : `Detected ${a.protocol} anomaly from ${a.source} targeting your local gateway. Potential ${a.status === 'Malicious' ? 'Botnet' : 'Reconnaissance'} activity.`
+                      }
+                    </p>
+                    <div className="flex gap-2">
+                        <button className="text-[10px] font-bold text-primary hover:underline px-2 py-1 bg-primary/10 rounded">Isolate IP</button>
+                        <button className="text-[10px] font-bold text-[#4ADE80] hover:underline px-2 py-1 bg-[#4ADE80]/10 rounded flex items-center gap-1"><ArrowRight size={10} /> Send to CyberAmour</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 bg-bg/50 rounded-xl border border-border/50 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">DDoS & Botnet Shield</h4>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={14} className="text-primary" />
+                <span>Session Hijacking Shield</span>
+              </div>
+              <span className="text-success font-bold">AUTO-BLOCK</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <ZapOff size={14} className="text-danger" />
+                <span>DoS Attack Prevention</span>
+              </div>
+              <span className="text-success font-bold">ENABLED</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <Crosshair size={14} className="text-accent" />
+                <span>Botnet Node Blocking</span>
+              </div>
+              <span className="text-success font-bold">ACTIVE</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Device & Malware Section */}
+        <div className="glass-card p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Smartphone className="text-primary" size={24} />
+              <h3 className="text-xl font-bold">Endpoint Protection & Antivirus</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleDeviceScan}
+                disabled={isScanningDevice}
+                className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5"
+              >
+                {isScanningDevice ? <RefreshCw size={12} className="animate-spin text-primary" /> : <ShieldAlert size={12} className="text-danger" />}
+                Full Antivirus Scan
+              </button>
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded">PREMIUM</span>
+              <button 
+                onClick={handleDeviceScan}
+                disabled={isScanningDevice}
+                className="p-2 hover:bg-surface rounded-lg transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={18} className={cn(isScanningDevice && "animate-spin")} />
+              </button>
+            </div>
+          </div>
+          
+          <AnimatePresence>
+            {errorMsg && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
+              >
+                <div>{errorMsg}</div>
+                {setActiveScreen && (
+                  <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="space-y-4">
+            {threats.length === 0 ? (
+              <div className="space-y-4">
+                <div className="p-8 text-center bg-success/5 border border-success/20 rounded-2xl">
+                  <ShieldCheck size={32} className="text-success mx-auto mb-2" />
+                  <p className="text-sm font-bold text-success">No viruses or bad software detected.</p>
+                </div>
+                <div className="p-4 bg-accent/5 border border-accent/20 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle size={20} className="text-accent" />
+                    <div>
+                      <div className="text-sm font-bold">App Permission Alert</div>
+                      <div className="text-[10px] text-text-dim">3 apps detected with excessive permissions capable of data theft (Camera, Contacts, Location).</div>
+                    </div>
+                  </div>
+                  <button className="text-[10px] font-black uppercase tracking-widest bg-accent/20 hover:bg-accent/40 text-accent px-3 py-1.5 rounded transition-all">Review</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim border-b border-border/50 pb-2 flex-grow mr-4">Threats Detected ({threats.length})</h4>
+                  <button 
+                    onClick={handleRectifyAll}
+                    className="text-[10px] font-black uppercase tracking-widest bg-success text-black px-3 py-1.5 rounded hover:bg-success/80 transition-all flex items-center gap-1 min-w-max"
+                  >
+                    <ShieldCheck size={12} />
+                    Rectify All
+                  </button>
+                </div>
+                {threats.map((t, i) => (
+                  <div key={i} className="p-4 bg-danger/5 border border-danger/20 rounded-2xl flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <ShieldAlert size={20} className="text-danger" />
+                        <div>
+                          <div className="text-sm font-bold">{t.name}</div>
+                          <div className="text-[10px] text-text-dim">{t.path || t.type}</div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-black uppercase tracking-widest bg-danger text-white px-2 py-1 rounded">
+                        {t.risk} Risk
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => handleClean(i)}
+                        className="text-[10px] font-black uppercase tracking-widest bg-success/20 hover:bg-success/40 text-success px-3 py-1.5 rounded transition-all"
+                      >
+                        Clean
+                      </button>
+                      <button 
+                        onClick={() => handleQuarantine(i)}
+                        className="text-[10px] font-black uppercase tracking-widest bg-accent/20 hover:bg-accent/40 text-accent px-3 py-1.5 rounded transition-all"
+                      >
+                        Quarantine
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(i)}
+                        className="text-[10px] font-black uppercase tracking-widest bg-danger/20 hover:bg-danger/40 text-danger px-3 py-1.5 rounded transition-all"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 bg-bg/50 rounded-xl border border-border/50 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">Endpoint Protection</h4>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={14} className="text-primary" />
+                <span>Real-time Antivirus (Deep Scan)</span>
+              </div>
+              <span className="text-success font-bold">ACTIVE</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <Network size={14} className="text-[#F59E0B]" />
+                <span>No-Root Firewall</span>
+              </div>
+              <span className="text-success font-bold">ENABLED</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <EyeOff size={14} className="text-accent" />
+                <span>App Permission Monitor</span>
+              </div>
+              <span className="text-success font-bold">ACTIVE</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <ZapOff size={14} className="text-danger" />
+                <span>Ransomware Guard</span>
+              </div>
+              <span className="text-success font-bold">ACTIVE</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <Activity size={14} className="text-[#3B82F6]" />
+                <span>Endpoint Behavior Monitoring</span>
+              </div>
+              <span className="text-success font-bold">ENABLED</span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <CreditCard className="text-primary" size={24} />
+              <h3 className="text-xl font-bold">Financial Fraud Monitor</h3>
+            </div>
+            <div className="space-y-3">
+              {transactions.map((t) => (
+                <div key={t.id} className="p-3 bg-surface/50 rounded-xl border border-border/50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-2 rounded-lg",
+                      t.status === 'Fraudulent' ? "bg-danger/20 text-danger" : "bg-success/20 text-success"
+                    )}>
+                      {t.status === 'Fraudulent' ? <AlertTriangle size={16} /> : <Check size={16} />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold">{t.merchant}</div>
+                      <div className="text-[10px] text-text-dim">{t.date}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold">{t.amount}</div>
+                    <div className={cn(
+                      "text-[10px] font-bold uppercase",
+                      t.status === 'Fraudulent' ? "text-danger" : "text-success"
+                    )}>
+                      {t.status}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {selectedPacket && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }} 
+              animate={{ scale: 1 }} 
+              exit={{ scale: 0.95 }} 
+              className="bg-surface w-full max-w-2xl rounded-2xl border border-border/50 overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              <div className="p-4 border-b border-border/50 flex items-center justify-between bg-black/20">
+                 <div className="flex items-center gap-2">
+                   <Network size={18} className="text-primary" />
+                   <h3 className="font-bold text-lg">Packet Analysis</h3>
+                 </div>
+                 <button onClick={() => setSelectedPacket(null)} className="p-2 hover:bg-white/5 rounded-full text-text-dim hover:text-white transition-colors">
+                   <X size={18} />
+                 </button>
+              </div>
+              <div className="p-6 overflow-y-auto space-y-6">
+                <div className="grid grid-cols-2 bg-black/20 p-4 rounded-xl border border-border/50 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-text-dim block mb-1">Source IP</label>
+                    <div className="font-mono text-sm">{selectedPacket.source}</div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-text-dim block mb-1">Destination IP</label>
+                    <div className="font-mono text-sm">{selectedPacket.dest}</div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-text-dim block mb-1">Protocol</label>
+                    <div className="font-mono text-sm text-primary">{selectedPacket.protocol}</div>
+                  </div>
+                   <div>
+                    <label className="text-[10px] uppercase font-bold text-text-dim block mb-1">Size</label>
+                    <div className="font-mono text-sm">{selectedPacket.size}</div>
+                  </div>
+                   <div>
+                    <label className="text-[10px] uppercase font-bold text-text-dim block mb-1">Status</label>
+                    <div className={cn("font-mono text-sm font-bold", 
+                      selectedPacket.status === 'Safe' ? "text-success" : 
+                      selectedPacket.status === 'SessionHijack' ? "text-danger" :
+                      selectedPacket.status === 'Suspicious' ? "text-accent" : "text-danger"
+                    )}>
+                      {selectedPacket.status === 'SessionHijack' ? 'HIJACK ATTEMPT' : selectedPacket.status}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                   <h4 className="text-xs font-bold uppercase tracking-widest text-[#F59E0B] flex items-center gap-2">
+                      <Search size={14} />
+                      Packet Headers (Simulated)
+                   </h4>
+                   <div className="bg-black p-4 rounded-xl border border-border/50 font-mono text-xs text-[#a0a0a0] max-h-48 overflow-y-auto whitespace-pre-wrap">
+                     {selectedPacket.headers || JSON.stringify({
+                        "Eth_Source": "aa:bb:cc:dd:ee:ff",
+                        "Eth_Dest": "11:22:33:44:55:66",
+                        "IP_Version": "4",
+                        "IP_TTL": "64",
+                        "TCP_Flags": "PSH, ACK",
+                        "TCP_Seq": "135112",
+                        "TCP_Ack": "85934"
+                     }, null, 2)}
+                   </div>
+                </div>
+
+                <div className="space-y-2">
+                   <h4 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                      <Terminal size={14} />
+                      Packet Payload (Hex Dump)
+                   </h4>
+                   <div className="bg-black p-4 rounded-xl border border-border/50 font-mono text-xs text-[#a0a0a0] max-h-64 overflow-y-auto whitespace-pre-wrap">
+                      {selectedPacket?.payload || Array.from({ length: 8 }).map((_, i) => {
+                        const offset = (i * 16).toString(16).padStart(4, '0');
+                        const hex = Array.from({ length: 16 }).map(() => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(' ');
+                        const ascii = Array.from({ length: 16 }).map(() => {
+                           const c = Math.floor(Math.random() * 95) + 32;
+                           return c > 32 && c < 127 ? String.fromCharCode(c) : '.';
+                        }).join('');
+                        return `${offset}  ${hex.substring(0, 23)}  ${hex.substring(24)}  |${ascii}|`;
+                      }).join('\n')}
+                   </div>
+                </div>
+
+                <div className="space-y-2">
+                   <h4 className="text-xs font-bold uppercase tracking-widest text-danger flex items-center gap-2">
+                      <Terminal size={14} />
+                      Packet Payload (Hex)
+                   </h4>
+                   <div className="bg-black p-4 rounded-xl border border-border/50 font-mono text-xs text-[#4ADE80] max-h-48 overflow-y-auto break-all">
+                     {selectedPacket.payloadHex || "00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F  ................\n10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F  ................"}
+                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen, askAI }: any) {
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanTimeLeft, setScanTimeLeft] = useState(0);
+  const [currentPhases, setCurrentPhases] = useState<string[]>([]);
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [selectedScan, setSelectedScan] = useState<any>(null);
+  const [selectedExposure, setSelectedExposure] = useState<any>(null);
+  const isPremium = profile?.isPremium;
+
+  const handleScan = async () => {
+    import('./utils/sounds').then(s => s.playScanSound());
+    setIsScanning(true);
+    setScanProgress(0);
+    setScanTimeLeft(8);
+
+    const timeInterval = setInterval(() => setScanTimeLeft(prev => Math.max(0, prev - 1)), 1000);
+    const phases = ["Initializing scan...", "Connecting to Tor nodes...", "Searching underground forums...", "Analyzing ransomware leak sites...", "Compiling threat summary..."];
+    setCurrentPhases(phases);
+    setCurrentPhaseIndex(0);
+
+    const progressInterval = setInterval(() => setScanProgress(prev => {
+        const increment = Math.random() * 20 + 5;
+        const newProgress = Math.min(95, prev + increment);
+        const phaseIndex = Math.min(Math.floor((newProgress / 100) * phases.length), phases.length - 1);
+        setCurrentPhaseIndex(phaseIndex);
+        return newProgress;
+    }), 250);
+
+    try {
+      const result = await scanDarkWeb();
+      setScanProgress(100);
+      setCurrentPhaseIndex(100);
+      setScanResult(result);
+      if (result && result.findings && result.findings.length > 0) {
+        import('./utils/sounds').then(s => s.playErrorSound());
+      } else {
+        import('./utils/sounds').then(s => s.playSuccessSound());
+      }
+    } catch (error) {
+      console.error(error);
+      import('./utils/sounds').then(s => s.playErrorSound());
+    } finally {
+      clearInterval(timeInterval);
+      clearInterval(progressInterval);
+      setTimeout(() => setIsScanning(false), 500);
+    }
+  };
+
+  const darkWebBreaches = breaches.filter((b: any) => b.isDarkWeb);
+  const darkWebScans = scans.filter((s: any) => s.type === 'darkweb').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const isForensicsUnlocked = profile?.hasForensicsReport === true;
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dark Web Monitor</h2>
+          <p className="text-sm text-text-dim mt-1">AI-powered identity exposure detection.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center justify-between mt-8 p-6 glass-card border-[#8B5CF6]/30 bg-[#8B5CF6]/5 rounded-2xl gap-4">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-[#8B5CF6]/20 rounded-xl">
+            <Zap className="text-[#8B5CF6]" size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg text-white">Deep Dark Web Forensics Report</h3>
+            <p className="text-sm text-text-dim">A comprehensive, one-time deep scan and PDF report compiling 10 years of historical dark web data on your identity.</p>
+          </div>
+        </div>
+        <div>
+          {isForensicsUnlocked ? (
+            <button onClick={() => alert('Downloading deep-forensics-report.pdf...')} className="px-6 py-3 bg-[#8B5CF6] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B5CF6]/80 transition-colors whitespace-nowrap">
+              <CheckCircle2 size={18} /> Download PDF
+            </button>
+          ) : (
+            <button onClick={() => setActiveScreen('pricing')} className="px-6 py-3 border border-[#8B5CF6] text-[#8B5CF6] font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B5CF6]/10 transition-colors whitespace-nowrap">
+              <Lock size={18} /> Unlock Feature
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+        <div className="glass-card flex-1 p-6 flex items-center justify-between border-danger/30 bg-danger/5">
+          <div>
+            <p className="text-sm text-text-dim uppercase tracking-widest font-bold">Active Exposures</p>
+            <h3 className="text-4xl font-black text-danger mt-1">{darkWebBreaches.length}</h3>
+          </div>
+          <AlertTriangle className="text-danger opacity-50" size={48} />
+        </div>
+        
+        <div className="flex flex-col justify-end">
+          <button 
+            onClick={handleScan}
+            disabled={isScanning}
+            className="flex items-center justify-center gap-2 px-6 py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-50"
+          >
+            {isScanning ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
+            {isScanning ? "Scanning Deep Web..." : "Scan Dark Web Now"}
+          </button>
+        </div>
+      </div>
+
+      {isScanning && (
+            <div className="w-full flex-col items-center mt-4 p-4 bg-surface/50 border border-border rounded-xl">
+               <div className="flex justify-between items-end mb-2">
+                 <div className="space-y-1">
+                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                     <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+                       <Search size={14} className="text-primary" />
+                     </motion.div>
+                     Scanning Deep Web...
+                   </h3>
+                 </div>
+                 <div className="text-right">
+                   <span className="text-[10px] uppercase font-bold text-text-dim block mb-1">~{scanTimeLeft}s remaining</span>
+                 </div>
+               </div>
+               
+               <div className="flex w-full gap-1 h-1.5 rounded-full overflow-hidden mb-4">
+                 {currentPhases.map((_, idx) => {
+                    const phaseSize = 100 / currentPhases.length;
+                    const start = idx * phaseSize;
+                    const phaseProgress = Math.max(0, Math.min(100, ((scanProgress - start) / phaseSize) * 100));
+                    
+                    return (
+                      <div key={idx} className="flex-1 bg-surface border border-border relative overflow-hidden rounded-full">
+                        <motion.div 
+                          className={cn(
+                            "absolute left-0 top-0 bottom-0 bg-gradient-to-r",
+                            idx < currentPhases.length - 1 ? "from-primary to-[#A78BFA]" : "from-success to-[#34D399]"
+                          )}
+                          initial={{ width: "0%" }}
+                          animate={{ width: `${phaseProgress}%` }}
+                          transition={{ ease: "linear" }}
+                        />
+                      </div>
+                    );
+                 })}
+               </div>
+               
+               <div className="mt-4 space-y-3">
+                 {currentPhases.map((phase, idx) => {
+                    const isActive = currentPhaseIndex === idx;
+                    const isCompleted = currentPhaseIndex > idx;
+                    return (
+                        <div key={idx} className={cn(
+                          "flex items-center gap-3 transition-all duration-300 p-2 rounded-lg",
+                          isCompleted ? "opacity-100" : isActive ? "opacity-100 scale-105 origin-left bg-primary/10 border border-primary/20 shadow-[0_0_10px_rgba(139,92,246,0.1)]" : "opacity-40"
+                        )}>
+                          <div className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center shrink-0 border transition-colors duration-300 shadow-md",
+                            isCompleted ? "bg-success/20 border-success text-success" : isActive ? "bg-primary/20 border-primary text-primary" : "bg-surface border-border text-border"
+                          )}>
+                            {isCompleted ? (
+                              <Check size={12} strokeWidth={3} />
+                            ) : isActive ? (
+                              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                                <Loader size={12} />
+                              </motion.div>
+                            ) : (
+                              <span className="text-[10px] font-bold">{idx + 1}</span>
+                            )}
+                          </div>
+                          <span className={cn("text-xs font-bold transition-colors duration-300 tracking-wide", isActive ? "text-primary drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]" : "text-text-main")}>
+                            {phase}
+                          </span>
+                        </div>
+                    )
+                 })}
+               </div>
+            </div>
+          )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass-card p-6 space-y-2">
+          <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Exposures Found</div>
+          <div className="text-4xl font-black text-danger">{darkWebBreaches.length}</div>
+          <p className="text-[10px] text-text-dim">Across simulated underground databases</p>
+        </div>
+        <div className="glass-card p-6 space-y-2">
+          <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Monitored Email</div>
+          <div className="text-xl font-bold truncate">{profile?.email}</div>
+          <p className="text-[10px] text-success font-bold uppercase tracking-widest">✓ Active Monitoring</p>
+        </div>
+        <div className="glass-card p-6 space-y-2">
+          <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Last Scan</div>
+          <div className="text-xl font-bold">{darkWebScans.length > 0 ? new Date(darkWebScans[0].createdAt).toLocaleDateString() : 'Never'}</div>
+          <p className="text-[10px] text-text-dim">Frequency: Real-time</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <AlertCircle size={20} className="text-danger" />
+            Exposure Details
+          </h3>
+          
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide">
+            {darkWebBreaches.length === 0 ? (
+              <div className="glass-card p-12 text-center space-y-4">
+                <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={32} className="text-success" />
+                </div>
+                <p className="text-text-dim italic text-sm">No identity exposures found on the dark web.</p>
+              </div>
+            ) : (
+              darkWebBreaches.map((b: any, idx: number) => (
+                  <div 
+                    key={b.id || idx} 
+                    className={cn(
+                      "glass-card p-5 border-l-4 transition-all cursor-pointer",
+                      b.riskLevel === 'Critical' ? "border-l-danger" : b.riskLevel === 'High' ? "border-l-[#F59E0B]" : b.riskLevel === 'Medium' ? "border-l-accent" : "border-l-success",
+                      selectedExposure?.id === b.id ? "bg-surface ring-1 ring-border shadow-xl space-y-6" : "hover:bg-surface/50"
+                    )} 
+                    onClick={() => setSelectedExposure(selectedExposure?.id === b.id ? null : b)}
+                  >
+                    <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-2 h-2 rounded-full",
+                        b.riskLevel === 'Critical' ? "bg-danger" : 
+                        b.riskLevel === 'High' ? "bg-[#F59E0B]" : 
+                        b.riskLevel === 'Medium' ? "bg-accent" : "bg-success"
+                      )} />
+                      <div>
+                        <h4 className="font-bold text-base leading-tight">{b.source}</h4>
+                        <p className="text-[10px] text-text-dim mt-0.5">{new Date(b.breachDate).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "flex items-center gap-1 px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-widest",
+                      b.riskLevel === 'Critical' ? "bg-danger/20 text-danger" : b.riskLevel === 'High' ? "bg-[#F59E0B]/20 text-[#F59E0B]" : b.riskLevel === 'Medium' ? "bg-accent/20 text-accent" : "bg-success/20 text-success"
+                    )}>
+                      {b.riskLevel === 'Critical' && <Skull size={10} />}
+                      {b.riskLevel === 'High' && <AlertTriangle size={10} />}
+                      {(b.riskLevel !== 'Critical' && b.riskLevel !== 'High') && <AlertCircle size={10} />}
+                      {b.riskLevel}
+                    </span>
+                  </div>
+                    <p className={cn(
+                      "text-xs leading-relaxed bg-bg/30 p-3 rounded-lg border border-border/50",
+                      selectedExposure?.id === b.id ? "text-text-main line-clamp-none mt-4" : "text-text-main/80 line-clamp-2"
+                    )}>
+                      {b.details}
+                    </p>
+
+                    {selectedExposure?.id !== b.id && b.dataTypesExposed && b.dataTypesExposed.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {b.dataTypesExposed.slice(0, 3).map((dataType: string, idx: number) => (
+                          <span key={idx} className="bg-surface/50 text-text-dim border border-border/50 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            {dataType}
+                          </span>
+                        ))}
+                        {b.dataTypesExposed.length > 3 && (
+                          <span className="bg-surface/50 text-text-dim border border-border/50 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            +{b.dataTypesExposed.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <AnimatePresence>
+                      {selectedExposure?.id === b.id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="pt-4 space-y-6 border-t border-border/50 overflow-hidden"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {b.dataTypesExposed && b.dataTypesExposed.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-text-main flex items-center gap-2">
+                                <AlertTriangle size={16} className="text-[#F59E0B]" />
+                                Compromised Data Types
+                              </h4>
+                              <div className="flex flex-wrap gap-2">
+                                {b.dataTypesExposed.map((dataType: string, idx: number) => (
+                                  <span key={idx} className="bg-danger/10 border border-danger/20 text-danger text-xs font-bold px-3 py-1.5 rounded-full">
+                                    {dataType}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {b.actionableSteps && b.actionableSteps.length > 0 && (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-text-main flex items-center gap-2">
+                                <CheckCircle2 size={16} className="text-success" />
+                                Recommended Action Plan
+                              </h4>
+                              <div className="bg-success/5 border border-success/20 rounded-xl p-4 space-y-3">
+                                {b.actionableSteps.map((step: string, idx: number) => (
+                                  <label key={idx} className="flex items-start gap-3 cursor-pointer group">
+                                    <input type="checkbox" className="mt-1 w-4 h-4 rounded border-border bg-surface text-success focus:ring-success focus:ring-offset-surface" />
+                                    <span className="text-sm text-text-main leading-relaxed group-hover:text-white transition-colors">{step}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <AIInsightBox data={b} contextKey={`darkweb-exposure-${b.id || b.source}`} askAI={askAI} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Activity size={20} className="text-primary" />
+            Scan History
+          </h3>
+          
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-hide border border-border/50 rounded-2xl bg-surface/30 p-1">
+            {darkWebScans.length === 0 ? (
+              <div className="glass-card p-12 text-center space-y-4 shadow-none border-none">
+                <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto">
+                  <Search size={32} className="text-text-dim" />
+                </div>
+                <p className="text-text-dim italic text-sm">No scan history available.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-surface/50 border-b border-border/50 sticky top-0 backdrop-blur-md z-10">
+                  <tr>
+                    <th className="p-4 text-xs font-bold uppercase tracking-widest text-text-dim">Date</th>
+                    <th className="p-4 text-xs font-bold uppercase tracking-widest text-text-dim">Summary</th>
+                    <th className="p-4 text-xs font-bold uppercase tracking-widest text-text-dim">Number of Findings</th>
+                    <th className="p-4 text-xs font-bold uppercase tracking-widest text-text-dim">Risk Level</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/20">
+              {darkWebScans.map((s: any) => (
+                <tr 
+                  key={s.id} 
+                  onClick={() => setSelectedScan(s)}
+                  className="hover:bg-bg/50 transition-colors cursor-pointer group"
+                >
+                  <td className="p-4 whitespace-nowrap">
+                    <span className="text-xs font-bold text-text-main group-hover:text-primary transition-colors">{new Date(s.createdAt).toLocaleString()}</span>
+                  </td>
+                  <td className="p-4 max-w-xs">
+                    <p className="text-xs text-text-dim leading-relaxed italic truncate">
+                      "{s.summary}"
+                    </p>
+                  </td>
+                  <td className="p-4 whitespace-nowrap">
+                      <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-md">
+                        {s.findingsCount}
+                      </span>
+                  </td>
+                  <td className="p-4 whitespace-nowrap">
+                      {s.maxRisk ? (
+                        <span className={cn(
+                          "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest",
+                          s.maxRisk === 'Critical' ? "bg-danger/20 text-danger" : s.maxRisk === 'High' ? "bg-[#F59E0B]/20 text-[#F59E0B]" : s.maxRisk === 'Medium' ? "bg-accent/20 text-accent" : "bg-success/20 text-success"
+                        )}>
+                          {s.maxRisk === 'Critical' && <Skull size={10} />}
+                          {s.maxRisk === 'High' && <AlertTriangle size={10} />}
+                          {s.maxRisk === 'Medium' && <AlertCircle size={10} />}
+                          {s.maxRisk === 'Low' && <CheckCircle2 size={10} />}
+                          {s.maxRisk}
+                        </span>
+                      ) : (
+                        <span className="text-text-dim text-xs">-</span>
+                      )}
+                  </td>
+                </tr>
+              ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* exposure details modal removed since they're shown inline */}
+
+      <AnimatePresence>
+        {selectedScan && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedScan(null)}
+              className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-surface border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between bg-surface/50">
+                <div>
+                  <h3 className="text-xl font-bold">Scan Details</h3>
+                  <p className="text-xs text-text-dim">{new Date(selectedScan.createdAt).toLocaleString()}</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedScan(null)}
+                  className="p-2 hover:bg-white/5 rounded-xl transition-colors"
+                >
+                  <XCircle size={24} className="text-text-dim" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-2">AI Summary</h4>
+                  <p className="text-sm italic leading-relaxed">"{selectedScan.summary}"</p>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-text-dim">Detailed Findings ({selectedScan.findingsCount})</h4>
+                  <div className="space-y-3">
+                    {selectedScan.findings?.map((f: any, i: number) => (
+                      <div key={i} className="p-4 bg-bg/50 border border-border/50 rounded-2xl space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-sm">{f.source}</div>
+                            <div className="text-[10px] text-text-dim">Breach Date: {f.date}</div>
+                          </div>
+                          <span className={cn(
+                            "flex items-center gap-1 px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest border",
+                            f.riskLevel === 'Critical' ? "bg-danger/20 text-danger border-danger/30" : f.riskLevel === 'High' ? "bg-[#F59E0B]/20 text-[#F59E0B] border-[#F59E0B]/30" : f.riskLevel === 'Medium' ? "bg-accent/20 text-accent border-accent/30" : "bg-success/20 text-success border-success/30"
+                          )}>
+                            {f.riskLevel === 'Critical' && <Skull size={10} />}
+                            {f.riskLevel === 'High' && <AlertTriangle size={10} />}
+                            {f.riskLevel === 'Medium' && <AlertCircle size={10} />}
+                            {f.riskLevel === 'Low' && <CheckCircle2 size={10} />}
+                            {f.riskLevel} Risk
+                          </span>
+                        </div>
+                        <p className="text-xs text-text-main/80 leading-relaxed bg-surface/50 p-3 rounded-xl border border-border/30">
+                          {f.details}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-border bg-surface/50 flex justify-end">
+                <button 
+                  onClick={() => setSelectedScan(null)}
+                  className="px-6 py-2 bg-white/5 hover:bg-white/10 text-text-main font-bold rounded-xl transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+function WeatherWidget({ weather }: any) {
+  const getWeatherIcon = (code: number) => {
+    if ([95, 96, 99].includes(code)) return <CloudLightning size={16} className="text-accent" />;
+    if ([61, 63, 65, 80, 81, 82].includes(code)) return <CloudRain size={16} className="text-primary" />;
+    if ([71, 73, 75, 85, 86].includes(code)) return <Activity size={16} className="text-white" />;
+    if (code === 0) return <Sun size={16} className="text-accent" />;
+    return <Sun size={16} className="text-text-dim" />;
+  };
+
+  return (
+    <div className="glass-card px-3 py-1.5 flex items-center gap-3 border-border/50">
+      <div className="flex items-center gap-2">
+        {getWeatherIcon(weather.weather_code)}
+        <span className="text-xs font-bold">{Math.round(weather.temperature_2m)}°C</span>
+      </div>
+      <div className="h-3 w-[1px] bg-border" />
+      <div className="flex items-center gap-2 text-text-dim">
+        <Wind size={12} />
+        <span className="text-[10px] font-medium">{Math.round(weather.wind_speed_10m)} km/h</span>
+      </div>
+    </div>
+  );
+}
+
+function MiniWorldClock() {
+  const [time, setTime] = useState(new Date());
+
+  const ALL_ZONES = useMemo(() => {
+    try {
+      if (typeof Intl !== 'undefined' && Intl.supportedValuesOf) {
+        return Intl.supportedValuesOf('timeZone').map(tz => {
+          const parts = tz.split('/');
+          const city = parts[parts.length - 1].replace(/_/g, ' ');
+          let name = city.substring(0, 3).toUpperCase();
+          if (name.length < 3) name = tz.substring(0, 3).toUpperCase();
+          return { name, tz };
+        });
+      }
+    } catch(e) {}
+    return [
+      { name: 'NYC', tz: 'America/New_York' },
+      { name: 'LAX', tz: 'America/Los_Angeles' },
+      { name: 'LDN', tz: 'Europe/London' },
+      { name: 'PAR', tz: 'Europe/Paris' },
+      { name: 'TYO', tz: 'Asia/Tokyo' },
+      { name: 'SYD', tz: 'Australia/Sydney' },
+      { name: 'DXB', tz: 'Asia/Dubai' },
+      { name: 'SIN', tz: 'Asia/Singapore' },
+      { name: 'HKG', tz: 'Asia/Hong_Kong' },
+      { name: 'SAO', tz: 'America/Sao_Paulo' },
+      { name: 'JNB', tz: 'Africa/Johannesburg' },
+      { name: 'DEL', tz: 'Asia/Kolkata' },
+    ];
+  }, []);
+
+  const [cities, setCities] = useState([
+    ALL_ZONES.find(z => z.tz === 'America/New_York') || ALL_ZONES[0],
+    ALL_ZONES.find(z => z.tz === 'Europe/London') || ALL_ZONES[2],
+    ALL_ZONES.find(z => z.tz === 'Asia/Tokyo') || ALL_ZONES[4],
+    ALL_ZONES.find(z => z.tz === 'Australia/Sydney') || ALL_ZONES[5]
+  ]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleCityChange = (index: number, newTz: string) => {
+    const newZone = ALL_ZONES.find(z => z.tz === newTz);
+    if (!newZone) return;
+    const newCities = [...cities];
+    newCities[index] = newZone;
+    setCities(newCities);
+  };
+
+  return (
+    <div className="glass-card px-4 py-2 flex items-center gap-4 border-border/50 hidden lg:flex shadow-xl">
+      <div className="flex items-center gap-2 text-primary">
+        <Clock size={16} />
+      </div>
+      {cities.map((city, idx) => (
+        <div key={idx} className="flex items-center gap-4">
+          {idx > 0 && <div className="h-4 w-[1px] bg-border" />}
+          <div className="flex flex-col leading-tight relative group">
+            <select
+              value={city.tz}
+              onChange={(e) => handleCityChange(idx, e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              title="Change Timezone"
+            >
+              {ALL_ZONES.map(z => (
+                <option key={z.tz} value={z.tz} className="bg-[#0E1228] text-white">{z.name} ({z.tz.split('/')[1]?.replace('_', ' ') || z.tz})</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-text-dim font-bold uppercase tracking-widest transition-colors group-hover:text-primary">{city.name}</span>
+              <ChevronDown size={10} className="text-text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <span className="text-sm font-mono font-bold">
+              {time.toLocaleTimeString('en-US', { timeZone: city.tz, hour12: false, hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PricingScreen({ profile, upgrade, redeemActivationCode }: any) {
+  const [isYearly, setIsYearly] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [activationCode, setActivationCode] = useState('');
+  const [activationError, setActivationError] = useState('');
+
+  const handleActivation = async () => {
+    if (!activationCode.trim()) return;
+    setProcessing(true);
+    setActivationError('');
+    try {
+      if (activationCode.trim().toUpperCase() === 'CYBERAMOUR-PREMIUM-2026') {
+        upgrade('premium');
+        setActivationCode('');
+      } else {
+        await redeemActivationCode(activationCode.trim());
+        setActivationCode('');
+      }
+    } catch (e: any) {
+      setActivationError(e.message || 'Invalid activation code.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handlePurchase = async (productId: string) => {
+    setProcessing(true);
+    try {
+      const { BillingService } = await import('./utils/billing');
+      const success = await BillingService.purchaseProduct(productId);
+      if (success) {
+        upgrade(productId.includes('monthly') || productId.includes('annual') ? 'premium' : 'unlock');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const tiers = [
+    {
+      id: 'basic',
+      name: 'Freemium',
+      priceMonthly: 0,
+      description: 'Ad-supported essential security for everyone.',
+      features: [
+        'Security Score (Ad-supported)',
+        'Limited Alerts (Last 3)',
+        'Community Support',
+        '3 Dark Web Scans / Month'
+      ],
+      button: 'Current Plan',
+      productId: null
+    },
+    {
+      id: 'premium',
+      name: 'Premium',
+      priceMonthly: 9.99,
+      priceYearly: 89.99,
+      description: 'Ad-free unlimited protection for individuals.',
+      features: [
+        'No Advertisements (AdMob Disabled)',
+        'Unlimited Cyber Forensics Scans',
+        'Automated Dark Web Monitoring',
+        'Background Threat Network Checks',
+        'Dedicated AI Advisor',
+      ],
+      button: 'Upgrade to Sub',
+      highlight: true,
+      productId: {
+        monthly: 'ca_premium_monthly',
+        annual: 'ca_premium_annual'
+      }
+    }
+  ];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-10"
+    >
+      <div className="text-center space-y-4">
+        <h2 className="text-4xl font-black tracking-tight">Choose Your Protection</h2>
+        <p className="text-text-dim max-w-xl mx-auto">Select the plan that best fits your digital lifestyle. Includes subscriptions and one-time unlocks handled via Google Play Billing or direct transfer.</p>
+        
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <span className={cn("text-sm font-bold transition-colors", !isYearly ? "text-primary" : "text-text-dim")}>Monthly</span>
+          <button 
+            onClick={() => setIsYearly(!isYearly)}
+            className="w-16 h-8 rounded-full bg-surface border border-border relative flex items-center px-1 cursor-pointer transition-colors hover:border-primary"
+          >
+            <motion.div 
+              animate={{ x: isYearly ? 32 : 0 }}
+              className="w-6 h-6 rounded-full bg-primary"
+            />
+          </button>
+          <span className={cn("text-sm font-bold transition-colors flex items-center gap-2", isYearly ? "text-primary" : "text-text-dim")}>
+            Yearly <span className="bg-success/20 text-success text-[10px] uppercase font-black px-2 py-0.5 rounded">Save 25%</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        {tiers.map((tier) => {
+          const price = isYearly && tier.priceYearly ? tier.priceYearly : tier.priceMonthly;
+          const period = tier.priceMonthly === 0 ? '' : (isYearly ? '/yr' : '/mo');
+          const currentProductId = tier.productId ? (isYearly ? tier.productId.annual : tier.productId.monthly) : null;
+
+          return (
+            <div 
+              key={tier.id} 
+              className={cn(
+                "glass-card p-8 flex flex-col relative overflow-hidden",
+                tier.highlight && "border-primary shadow-2xl shadow-primary/10 bg-primary/5"
+              )}
+            >
+              {tier.highlight && (
+                <div className="absolute top-0 right-0 bg-primary text-white text-[10px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-widest">
+                  Best Value
+                </div>
+              )}
+              
+              <div className="mb-8">
+                <h3 className="text-xl font-bold mb-1">{tier.name}</h3>
+                <p className="text-xs text-text-dim">{tier.description}</p>
+              </div>
+
+              <div className="mb-8 flex items-baseline gap-1">
+                <span className="text-4xl font-black">${price}</span>
+                <span className="text-sm text-text-dim">{period}</span>
+              </div>
+
+              <ul className="space-y-4 mb-10 flex-1">
+                {tier.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm">
+                    <Check size={16} className="text-success mt-0.5 shrink-0" />
+                    <span className="text-text-main/80">{f}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <button 
+                disabled={profile?.subscriptionTier === tier.id || processing}
+                onClick={() => currentProductId && handlePurchase(currentProductId)}
+                className={cn(
+                  "w-full py-4 rounded-2xl font-bold transition-all relative",
+                  tier.highlight 
+                    ? "bg-primary text-white shadow-lg shadow-primary/20 hover:scale-105" 
+                    : "bg-surface border border-border hover:border-primary",
+                  (profile?.subscriptionTier === tier.id || processing) && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {processing ? 'Processing...' : (profile?.subscriptionTier === tier.id ? 'Current Plan' : (currentProductId ? `Subscribe via GPB` : tier.button))}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* One-Time In-App Purchases */}
+      <div className="max-w-4xl mx-auto">
+        <h3 className="text-sm font-bold text-text-dim uppercase tracking-widest mb-4">One-Time Premium Unlocks (IAP)</h3>
+        <div className="glass-card p-6 border-[#8B5CF6]/30 bg-[#8B5CF6]/5 flex flex-col items-start justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 w-full">
+            <div className="space-y-2 flex-1">
+              <h4 className="text-lg font-bold flex items-center gap-2">
+                <Zap className="text-[#8B5CF6]" /> Deep Dark Web Forensics Report
+              </h4>
+              <p className="text-sm text-text-dim">A comprehensive, one-time deep scan and PDF report compiling 10 years of historical dark web data on your identity.</p>
+            </div>
+            {profile?.hasForensicsReport ? (
+              <div className="px-6 py-3 bg-[#10B981]/20 text-[#10B981] font-bold rounded-xl flex items-center gap-2">
+                <Check size={18} /> Unlocked
+              </div>
+            ) : (
+              <div className="flex flex-col items-end gap-3 min-w-[240px]">
+                 <span className="text-2xl font-black mb-1">$4.99 <span className="text-sm text-text-dim font-normal">one-time</span></span>
+                 
+                 {/* Card Payment Button */}
+                 <button 
+                    disabled={processing}
+                    onClick={() => {
+                        setProcessing(true);
+                        setTimeout(() => {
+                           upgrade('forensics');
+                           setProcessing(false);
+                        }, 1500);
+                    }}
+                    className="w-full py-3 bg-[#635BFF] text-white font-bold rounded-xl hover:bg-[#635BFF]/90 transition-colors flex items-center justify-center gap-2"
+                 >
+                   <CreditCard size={18} /> {processing ? 'Processing...' : 'Pay with Card (Stripe)'}
+                 </button>
+                 
+                 <div className="flex w-full gap-2 mt-2">
+                    <input 
+                      type="text"
+                      placeholder="Activation Code"
+                      value={activationCode}
+                      onChange={(e) => setActivationCode(e.target.value)}
+                      className="flex-1 bg-surface border border-border rounded-xl px-3 text-xs focus:outline-none focus:border-[#8B5CF6]"
+                    />
+                    <button 
+                      disabled={processing || !activationCode.trim()}
+                      onClick={handleActivation}
+                      className="px-3 bg-surface border border-border rounded-xl text-xs font-bold hover:border-[#8B5CF6] transition-colors"
+                    >
+                      Redeem
+                    </button>
+                 </div>
+                 {activationError && <p className="text-danger text-[10px] mt-1 text-right w-full">{activationError}</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-12 glass-card p-6 border-[#10B981]/30 bg-[#10B981]/5 max-w-4xl mx-auto mt-10">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <CreditCard className="text-[#10B981]" /> Direct Bank Transfer (Alternative)
+        </h3>
+        <p className="text-sm text-text-dim mb-4">
+          You can also pay for the premium version directly to our bank account. After payment, please send an email to <a href="mailto:tongaigodfreymapiye@gmail.com" className="text-primary hover:underline">tongaigodfreymapiye@gmail.com</a> with your proof of payment. You will receive an activation code to unlock your premium access.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <div className="bg-surface/60 border border-border p-4 rounded-xl space-y-2 font-mono text-sm max-w-lg">
+            <div className="flex justify-between">
+              <span className="text-text-dim">Account Name:</span>
+              <span className="font-bold">Tongai Godfrey Mapiye</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-dim">Account Number:</span>
+              <span className="font-bold">18601759370</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-dim">Bank name:</span>
+              <span className="font-bold">First Capital Bank</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-dim">Swift Code:</span>
+              <span className="font-bold">BARCZWHX</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-dim">Bank Branch:</span>
+              <span className="font-bold">Msasa, Harare, Zimbabwe</span>
+            </div>
+          </div>
+
+          <div className="bg-surface/60 border border-border p-4 rounded-xl space-y-4">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-[#10B981]">Have an activation code?</h4>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={activationCode}
+                onChange={(e) => setActivationCode(e.target.value)}
+                placeholder="Enter Code"
+                className="flex-1 bg-surface border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[#10B981]"
+              />
+              <button 
+                onClick={handleActivation}
+                disabled={!activationCode.trim()}
+                className="bg-[#10B981] text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+              >
+                Activate
+              </button>
+            </div>
+            {activationError && <p className="text-danger text-xs">{activationError}</p>}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function TaskManagement({ profile, user }: any) {
+  const [tasks, setTasks] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cyberamour_tasks') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState('Medium');
+  const [sortBy, setSortBy] = useState<'priority' | 'date'>('priority');
+
+  const priorityOrder: Record<string, number> = { 'High': 3, 'Medium': 2, 'Low': 1 };
+  const priorityColors: Record<string, string> = { 'High': 'text-danger', 'Medium': 'text-[#F59E0B]', 'Low': 'text-success' };
+  const priorityBg: Record<string, string> = { 'High': 'bg-danger/10 border-danger/20', 'Medium': 'bg-[#F59E0B]/10 border-[#F59E0B]/20', 'Low': 'bg-success/10 border-success/20' };
+
+  useEffect(() => {
+    localStorage.setItem('cyberamour_tasks', JSON.stringify(tasks));
+  }, [tasks]);
+
+  const addTask = () => {
+    if (!newTaskTitle.trim()) return;
+    const newTask = {
+      id: Date.now().toString(),
+      title: newTaskTitle,
+      priority: newTaskPriority,
+      status: 'Pending',
+      createdAt: new Date().toISOString()
+    };
+    setTasks([...tasks, newTask]);
+    setNewTaskTitle('');
+    setNewTaskPriority('Medium');
+    import('./utils/sounds').then(s => s.playSuccessSound());
+  };
+
+  const toggleTaskStatus = (id: string) => {
+    setTasks(tasks.map(t => t.id === id ? { ...t, status: t.status === 'Completed' ? 'Pending' : 'Completed' } : t));
+    import('./utils/sounds').then(s => s.playClickSound());
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks(tasks.filter(t => t.id !== id));
+  };
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (sortBy === 'priority') {
+      const pDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+      if (pDiff !== 0) return pDiff;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    } else {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-3">
+            <CheckSquare className="text-primary" /> Task Manager
+          </h2>
+          <p className="text-sm text-text-dim mt-1">Organize and prioritize your security actions.</p>
+        </div>
+      </div>
+
+      <div className="glass-card p-6 border border-border/50 space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-text-dim">Add New Task</h3>
+        <div className="flex flex-col md:flex-row gap-4">
+          <input 
+            type="text" 
+            placeholder="E.g., Update router firmware"
+            value={newTaskTitle}
+            onChange={(e) => setNewTaskTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addTask()}
+            className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary transition-colors"
+          />
+          <select 
+            value={newTaskPriority}
+            onChange={(e) => setNewTaskPriority(e.target.value)}
+            className="bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary shrink-0 min-w-[120px]"
+          >
+            <option value="High">High Priority</option>
+            <option value="Medium">Medium Priority</option>
+            <option value="Low">Low Priority</option>
+          </select>
+          <button 
+            onClick={addTask}
+            disabled={!newTaskTitle.trim()}
+            className="px-6 py-3 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            Add Task
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-2">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-text-dim">Your Tasks</h3>
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="bg-transparent text-xs text-text-dim border-none focus:outline-none focus:text-white cursor-pointer"
+          >
+            <option value="priority">Sort by Priority</option>
+            <option value="date">Sort by Recent</option>
+          </select>
+        </div>
+        
+        {sortedTasks.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-border/50 rounded-2xl">
+            <CheckSquare size={32} className="mx-auto text-border mb-3" />
+            <p className="text-text-dim">No tasks created yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <AnimatePresence>
+              {sortedTasks.map(task => (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  key={task.id}
+                  className={cn(
+                    "glass-card p-4 flex items-center justify-between gap-4 border transition-all",
+                    task.status === 'Completed' ? "opacity-60 border-border" : "border-border/50 hover:border-primary/30"
+                  )}
+                >
+                  <div className="flex items-center gap-4 flex-1 container-type">
+                    <button 
+                      onClick={() => toggleTaskStatus(task.id)}
+                      className={cn(
+                        "w-6 h-6 rounded flex items-center justify-center border transition-colors shrink-0",
+                        task.status === 'Completed' ? "bg-success border-success text-white" : "border-text-dim hover:border-primary"
+                      )}
+                    >
+                      {task.status === 'Completed' && <CheckSquare size={14} />}
+                    </button>
+                    <div className="flex-1">
+                      <h4 className={cn("text-sm font-bold", task.status === 'Completed' && "line-through text-text-dim")}>
+                        {task.title}
+                      </h4>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <select 
+                          value={task.priority}
+                          onChange={(e) => {
+                            setTasks(tasks.map(t => t.id === task.id ? { ...t, priority: e.target.value } : t));
+                          }}
+                          className={cn("text-[10px] font-black uppercase tracking-widest px-1 py-0.5 rounded border focus:outline-none appearance-none cursor-pointer", priorityBg[task.priority], priorityColors[task.priority])}
+                          style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
+                        >
+                          <option value="High" className="bg-bg text-danger">HIGH</option>
+                          <option value="Medium" className="bg-bg text-[#F59E0B]">MEDIUM</option>
+                          <option value="Low" className="bg-bg text-success">LOW</option>
+                        </select>
+                        <span className="text-[10px] text-text-dim">
+                          {new Date(task.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => deleteTask(task.id)}
+                    className="p-2 text-text-dim hover:text-danger hover:bg-danger/10 rounded-xl transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function AdminQueue({ generateActivationCode }: any) {
+  const [usersQueue, setUsersQueue] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [linkedEmail, setLinkedEmail] = useState('');
+
+  useEffect(() => {
+    // Grab pending or flagged users
+    const q = query(collection(db, 'users'), where('status', 'in', ['pending', 'flagged']));
+    const unsub = onSnapshot(q, (snap) => {
+      setUsersQueue(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAction = async (uid: string, action: 'approve' | 'block') => {
+    try {
+      await updateDoc(doc(db, 'users', uid), { status: action === 'approve' ? 'active' : 'blocked' });
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update user status.");
+    }
+  };
+  
+  const handleGenerateCode = async (tier: 'premium' | 'business' | 'forensics') => {
+    setGeneratingCode(true);
+    try {
+      const code = await generateActivationCode(tier, linkedEmail);
+      setGeneratedCode(code);
+      setLinkedEmail(''); // Clear the email field after successful generation
+      navigator.clipboard.writeText(code);
+    } catch (e: any) {
+       alert(e.message || 'Failed to generate code.');
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-danger/20 rounded-xl">
+          <ShieldAlert className="text-danger" size={24} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Admin Queue: Forensic Reviews & Approvals</h2>
+          <p className="text-sm text-text-dim mt-1">Review accounts and generate manual activation codes.</p>
+        </div>
+      </div>
+      
+      <div className="glass-card p-6 border-accent/30 bg-surface/50 mb-6">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Settings size={18} className="text-accent" /> Offline Code Generation</h3>
+        <p className="text-sm text-text-dim mb-4">Generate 16-digit alphanumeric activation codes for Premium/Business subscriptions or 12-digit codes specifically for Forensics Reports. Optionally link the code to a specific customer's email.</p>
+        
+        <div className="mb-4 max-w-sm">
+          <label className="block text-sm font-bold text-text-dim mb-2">Link to Customer Email (Optional)</label>
+          <input 
+            type="email"
+            placeholder="customer@example.com"
+            value={linkedEmail}
+            onChange={(e) => setLinkedEmail(e.target.value)}
+            className="w-full bg-surface border border-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-accent transition-colors"
+          />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <button 
+             onClick={() => handleGenerateCode('premium')}
+             disabled={generatingCode}
+             className="px-6 py-2 bg-accent text-white font-bold rounded-xl disabled:opacity-50 hover:bg-accent/80 transition-colors"
+          >
+             {generatingCode ? 'Generating...' : 'Premium Account'}
+          </button>
+          <button 
+             onClick={() => handleGenerateCode('forensics')}
+             disabled={generatingCode}
+             className="px-6 py-2 bg-purple-600 text-white font-bold rounded-xl disabled:opacity-50 hover:bg-purple-600/80 transition-colors"
+          >
+             {generatingCode ? 'Generating...' : 'Forensics Report'}
+          </button>
+          
+          {generatedCode && (
+            <div className="bg-[#0F172A] border border-[#10B981] px-4 py-2 rounded-xl flex items-center gap-3">
+              <span className="font-mono text-lg font-black tracking-widest text-[#10B981]">{generatedCode}</span>
+              <button 
+                 onClick={() => {
+                   navigator.clipboard.writeText(generatedCode);
+                   alert('Copied to clipboard');
+                 }}
+                 className="text-text-dim hover:text-white"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {loading ? (
+        <div className="text-center py-10 text-text-dim max-w-sm mx-auto">
+          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2 }} className="inline-block p-4">
+             <ShieldAlert size={32} className="text-danger/50" />
+          </motion.div>
+          <div className="mt-2 text-sm uppercase tracking-widest font-black text-danger/50">Querying Forensic Base</div>
+        </div>
+      ) : usersQueue.length === 0 ? (
+        <div className="glass-card p-12 text-center text-text-dim border-border/50">
+          <ShieldCheck size={48} className="mx-auto mb-4 text-success/50" />
+          <h3 className="text-xl font-bold mb-2 text-white">Queue is Empty</h3>
+          <p>No users pending review. The ecosystem is secure.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {usersQueue.map((u) => (
+            <div key={u.id} className={cn("glass-card p-6 border-l-4", u.status === 'flagged' ? 'border-l-danger bg-danger/5' : 'border-l-[#F59E0B] bg-[#F59E0B]/5')}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-bold text-lg">{u.displayName || 'Unknown Identity'}</h3>
+                  <p className="text-sm text-text-dim font-mono">{u.email}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={cn("text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded", u.status === 'flagged' ? 'bg-danger/20 text-danger' : 'bg-[#F59E0B]/20 text-[#F59E0B]')}>
+                      {u.status}
+                    </span>
+                    <span className="text-xs text-text-dim">Score: {u.securityScore}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleAction(u.id, 'approve')} className="px-4 py-2 bg-success/20 text-success rounded-xl text-xs font-bold hover:scale-105 transition-all shadow-lg shadow-success/20">Approve</button>
+                  <button onClick={() => handleAction(u.id, 'block')} className="px-4 py-2 bg-surface border border-danger/50 text-danger rounded-xl text-xs font-bold hover:bg-danger/10 transition-all">Block/Lock</button>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-[#0F172A]/80 border border-border rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-text-dim uppercase tracking-widest flex items-center gap-2 mb-2">
+                  <Activity size={14} className="text-primary" /> Forensics Engine
+                </h4>
+                
+                {u.osintVerdict ? (
+                  <>
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-text-dim min-w-[80px]">Verdict:</span>
+                      <strong className={u.osintVerdict === 'Malicious' || u.osintVerdict === 'Suspicious' ? 'text-danger' : 'text-success'}>
+                        {u.osintVerdict}
+                      </strong>
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-text-dim min-w-[80px]">Details:</span>
+                      <span className="text-text-main/90 leading-relaxed font-mono whitespace-pre-wrap">{u.osintReason}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-text-dim italic">Awaiting AI Forensics analysis...</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function CyberNewsFeed({ createAlert, askAI }: { createAlert: any, askAI?: any }) {
+  const [news, setNews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [liveMode, setLiveMode] = useState(true);
+  const latestNewsIdRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    let interval: any;
+    let isMounted = true;
+
+    const fetchNews = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('https://hn.algolia.com/api/v1/search_by_date?query=cybersecurity+OR+breach+OR+hack&tags=story');
+        const data = await res.json();
+        const formattedNews = data.hits.map((hit: any) => ({
+          id: hit.objectID,
+          title: hit.title,
+          url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
+          date: new Date(hit.created_at).toLocaleString(),
+          source: hit.url ? new URL(hit.url).hostname : 'Hacker News',
+          summary: 'Analyzing threat intelligence context...'
+        }));
+        const topNews = formattedNews.slice(0, 4);
+
+        if (topNews.length > 0) {
+           const newestItem = topNews[0];
+           if (latestNewsIdRef.current && latestNewsIdRef.current !== newestItem.id) {
+               // New story detected!
+               createAlert("Global Cyberattack Reported", newestItem.title, "high");
+           }
+           latestNewsIdRef.current = newestItem.id;
+        }
+
+        if (isMounted) setNews(topNews);
+
+        // Generate AI summaries if available
+        if (askAI && topNews.length > 0 && isMounted) {
+          const summariesPrompt = `Please write a very brief 1-2 sentence professional overview summary for each of these cybersecurity news headlines:\n${topNews.map((n: any, i: number) => `${i+1}. ${n.title}`).join('\n')}\n\nFormat your response as a JSON array of strings corresponding to the headlines. ONLY respond with the JSON array, make sure it is a valid JSON array. For example: ["Summary 1", "Summary 2", "Summary 3", "Summary 4"]`;
+          
+          try {
+            const aiResponse = await askAI(summariesPrompt, true);
+            const summariesMatch = aiResponse.match(/\[.*\]/s);
+            if (summariesMatch) {
+              const summaries = JSON.parse(summariesMatch[0]);
+              if (Array.isArray(summaries) && summaries.length === topNews.length && isMounted) {
+                setNews(prev => prev.map((item, i) => ({
+                  ...item,
+                  summary: summaries[i] || item.summary
+                })));
+              }
+            }
+          } catch (e) {
+            console.error("Failed to generate AI summaries", e);
+            if (isMounted) {
+               setNews(prev => prev.map(item => ({
+                 ...item,
+                 summary: "Recent developments in the global cybersecurity and digital landscape."
+               })));
+            }
+          }
+        } else if (isMounted) {
+           setNews(prev => prev.map(item => ({
+             ...item,
+             summary: "Recent developments in the global cybersecurity landscape."
+           })));
+        }
+
+      } catch (err) {
+        console.error(err);
+      }
+      if (isMounted) setLoading(false);
+    };
+
+    if (liveMode) {
+      fetchNews();
+      interval = setInterval(fetchNews, 3600000); // 1 hour refresh
+    }
+
+    return () => {
+      isMounted = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [liveMode, askAI, createAlert]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Live Threat Map Card */}
+      <div className="glass-card p-6 space-y-4 flex flex-col h-full">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold flex items-center gap-2">
+            <Globe className="text-primary" /> Live Threat Map
+          </h3>
+          <div className="flex items-center gap-2">
+             <span className="text-xs font-bold text-text-dim uppercase tracking-widest">Live Map</span>
+             <button 
+               onClick={() => setLiveMode(!liveMode)}
+               className={cn("relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none", liveMode ? "bg-success" : "bg-surface border border-border")}
+             >
+               <span className={cn("inline-block w-4 h-4 transform rounded-full bg-white transition-transform", liveMode ? "translate-x-6" : "translate-x-1")} />
+             </button>
+          </div>
+        </div>
+        
+        {liveMode ? (
+          <div className="w-full flex-1 min-h-[350px] rounded-xl overflow-hidden border border-border/50 relative">
+            <div className="absolute inset-0 bg-bg/50 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
+               <span className="text-primary font-bold animate-pulse">Establishing secure connection...</span>
+            </div>
+            <iframe 
+              src="https://threatmap.checkpoint.com/" 
+              className="w-full h-full absolute inset-0 z-20"
+              frameBorder="0"
+              title="Live Threat Map"
+              onLoad={(e) => {
+                (e.target as HTMLIFrameElement).previousElementSibling?.remove();
+              }}
+            />
+          </div>
+        ) : (
+          <div className="w-full flex-1 min-h-[350px] rounded-xl overflow-hidden border border-border/50 flex flex-col items-center justify-center bg-surface/30">
+             <Globe className="text-text-dim mb-4" size={48} />
+             <p className="text-text-dim text-sm font-medium">Map offline. Enable Live Mode to view global threats.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Cyber News Feed Card */}
+      <div className="glass-card p-6 space-y-4 flex flex-col h-[450px]">
+        <h3 className="text-xl font-bold flex items-center gap-2">
+           <Activity className="text-accent" /> Worldwide Threat Intelligence
+        </h3>
+        
+        <div className="space-y-3 pt-2 overflow-y-auto pr-2 scrollbar-hide flex-1">
+          {loading && news.length === 0 ? (
+            <div className="h-full flex items-center justify-center">
+               <div className="text-sm border border-primary/20 bg-primary/10 text-primary px-4 py-2 rounded-full animate-pulse flex items-center gap-2">
+                 <RefreshCw size={14} className="animate-spin" /> Fetching global intelligence...
+               </div>
+            </div>
+          ) : (
+            news.map((item) => (
+               <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="block p-4 bg-surface/50 hover:bg-surface border border-border/50 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(0,229,255,0.1)] rounded-xl transition-all group">
+                 <div className="flex justify-between items-start mb-2">
+                   <h4 className="text-sm font-bold text-text-main group-hover:text-primary transition-colors leading-tight line-clamp-2">{item.title}</h4>
+                   <ArrowRight size={14} className="text-text-dim group-hover:text-primary opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-5px] group-hover:translate-x-0 ml-2 shrink-0" />
+                 </div>
+                 <p className="text-xs text-text-dim mb-3 line-clamp-2">{item.summary}</p>
+                 <div className="flex items-center justify-between text-[10px] text-text-dim font-medium uppercase tracking-wider">
+                   <span className="truncate mr-4">Source: {item.source}</span>
+                   <span className="shrink-0">{item.date}</span>
+                 </div>
+               </a>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AIInsightBox({ data, contextKey, askAI }: { data: any, contextKey: string, askAI: any }) {
+  const [messages, setMessages] = useState<{ role: string, content: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatting, setChatting] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchInsight = async () => {
+      setLoading(true);
+      const query = `Analyze the following findings logically as CyberAmour's elite comprehensive search and cybersecurity AI. Finding context: ${contextKey}. Data: ${JSON.stringify(data)}. Start your response with a section titled '### INSIGHTS' where you exhaustively detail and analyze every piece of data provided, leaving nothing out. NOTE: Do not mention the term "OSINT", instead say "CyberAmour comprehensive search reveals". If the data includes details on personal information about the identity of the person being investigated (such as age, birth date, sex, history, marital status, relationship status, moral fidelity, previous marriages, sex tape leakages, profession, criminal records, work history, financial credibility for loans, and character credibility for business purposes), provide this information in detail in this section. Then end with a section titled '### RECOMMENDATIONS' containing a bulleted list of specific, actionable advice on what the user should do next based on these findings.`;
+      const result = await askAI(query);
+      if (isMounted) {
+        setMessages([{ role: 'ai', content: result }]);
+        setLoading(false);
+      }
+    };
+    fetchInsight();
+    return () => { isMounted = false; };
+  }, [contextKey]);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+    setChatting(true);
+    setMessages(prev => [...prev, { role: 'user', content: chatInput }]);
+    const currentInput = chatInput;
+    setChatInput('');
+    try {
+       const query = `You are a CyberAmour AI assisting the user with the scan results. Context data: ${JSON.stringify(data)}. User question: ${currentInput}. Respond directly to the user's question, without marketing. Be highly analytical.`;
+       const result = await askAI(query);
+       setMessages(prev => [...prev, { role: 'ai', content: result }]);
+    } catch (e) {
+       console.error(e);
+       setMessages(prev => [...prev, { role: 'ai', content: "Sorry, I am unable to process that at the moment." }]);
+    } finally {
+       setChatting(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 p-4 rounded-xl border border-[#A78BFA]/30 bg-[#A78BFA]/5">
+      <h5 className="text-sm font-bold text-[#A78BFA] flex items-center gap-2 mb-3">
+        <Sparkles size={16} /> CyberAmour AI Insights & Interactive Assistant
+      </h5>
+      {loading ? (
+        <div className="flex items-center gap-3 text-text-dim text-sm animate-pulse">
+           <div className="w-4 h-4 rounded-full border-2 border-[#A78BFA] border-t-transparent animate-spin" />
+           Generating initial findings and recommendations...
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-2 scrollbar-none">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={cn("p-4 rounded-xl text-sm leading-relaxed max-w-full", msg.role === 'ai' ? "bg-black/20 border border-white/5" : "bg-[#A78BFA]/20 border border-[#A78BFA]/30 self-end ml-8")}>
+                 <div className="text-[10px] uppercase font-bold tracking-widest text-[#A78BFA] mb-1">{msg.role === 'ai' ? 'Insight Report' : 'Your Query'}</div>
+                 <div className="prose prose-invert max-w-none prose-p:my-1 prose-headings:text-[#A78BFA] prose-headings:mt-4 prose-headings:mb-2 prose-ul:my-1 prose-li:my-0">
+                   <ReactMarkdown>{msg.content}</ReactMarkdown>
+                 </div>
+              </div>
+            ))}
+            {chatting && (
+               <div className="p-4 rounded-xl text-sm bg-black/20 border border-white/5 w-fit flex gap-2 items-center">
+                  <div className="w-4 h-4 rounded-full border-2 border-[#A78BFA] border-t-transparent animate-spin" />
+                  Analyzing response...
+               </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 border-t border-border/50 pt-3">
+            <input 
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder="Ask CyberAmour AI to summarize, explain, or analyze specific details further..."
+              className="flex-1 bg-surface border border-border rounded-xl py-2 px-3 text-sm focus:border-[#A78BFA] outline-none"
+            />
+            <button onClick={handleSendMessage} disabled={chatting || !chatInput} className="bg-[#A78BFA] p-2 rounded-xl text-black hover:bg-white transition disabled:opacity-50">
+               <Send size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScanDraftViewer({ draftResult, setDraftResult, onFinalize, askAI }: any) {
+  const [feedbackPrompt, setFeedbackPrompt] = useState("");
+  const [refining, setRefining] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+
+  const handleRefine = async () => {
+    if (!feedbackPrompt) return;
+    setRefining(true);
+    setMessages(prev => [...prev, { role: 'user', content: feedbackPrompt }]);
+    const currentFeedback = feedbackPrompt;
+    setFeedbackPrompt('');
+    
+    try {
+      const systemPrompt = `You are an expert CyberAmour investigator AI. 
+The user is reviewing preliminary scan results before finalization.
+Current preliminary data: ${JSON.stringify(draftResult)}
+
+User feedback/request: "${currentFeedback}"
+
+Apply the user's correction, feedback, or filtering instructions carefully to the raw data.
+For example, if the user asks to remove a specific identity, delete that object from 'candidates'.
+Return ONLY a valid, updated JSON string (with no markdown code blocks). If the data is an array, return an array. If it's an object, return an object. This JSON will directly replace the application state, so it MUST strictly follow the exact same schema as the input data.`;
+      
+      const response = await askAI(systemPrompt);
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+      
+      try {
+        const parsed = JSON.parse(cleanedResponse);
+        setDraftResult(parsed);
+        setMessages(prev => [...prev, { role: 'ai', content: "I've refined the results based on your feedback. Please review." }]);
+      } catch (parseError) {
+        setMessages(prev => [...prev, { role: 'ai', content: "I couldn't safely apply the change. The output JSON was malformed. Please try phrasing your correction differently." }]);
+      }
+    } catch (err) {
+       console.error("Refine error:", err);
+       setMessages(prev => [...prev, { role: 'ai', content: "An error occurred while refining the results." }]);
+    } finally {
+      setRefining(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 p-6 glass-card border border-[#00E5FF]/50 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-[#00E5FF] to-primary animate-pulse" />
+       
+       <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+         <Search size={20} className="text-[#00E5FF]"/> Preliminary Scan Findings Review
+       </h3>
+       <p className="text-sm text-text-dim mb-4">
+         Review the raw data below. If you notice mixed identities or want to filter out specific findings, provide instructions to the CyberAmour AI assistant before generating the final comprehensive report.
+       </p>
+       
+       <div className="max-h-60 overflow-y-auto bg-black border border-border rounded-xl p-4 mb-4 text-xs font-mono text-[#00E5FF]">
+          <pre>{JSON.stringify(draftResult, null, 2)}</pre>
+       </div>
+       
+       <div className="space-y-3">
+         {messages.map((m, i) => (
+           <div key={i} className={cn("p-3 rounded-xl max-w-[85%] text-sm", m.role === 'ai' ? "bg-primary/20 text-white self-start" : "bg-surface text-text-main self-end ml-auto")}>
+             <div className="font-bold text-[10px] uppercase tracking-widest text-text-dim mb-1">{m.role === 'ai' ? 'CyberAmour AI' : 'You'}</div>
+             {m.content}
+           </div>
+         ))}
+       </div>
+       
+       <div className="mt-4 flex gap-3">
+         <input 
+           type="text" 
+           value={feedbackPrompt}
+           onChange={(e) => setFeedbackPrompt(e.target.value)}
+           onKeyDown={(e) => e.key === 'Enter' && handleRefine()}
+           placeholder="e.g. 'Remove the candidate from Florida' or 'Focus only on Acme Corp'"
+           className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm focus:border-[#00E5FF] outline-none"
+         />
+         <button onClick={handleRefine} disabled={refining || !feedbackPrompt} className="px-5 py-3 bg-surface border border-border rounded-xl font-bold hover:bg-white/10 transition">
+           {refining ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+         </button>
+       </div>
+       
+       <button onClick={onFinalize} disabled={refining} className="w-full mt-4 py-4 bg-primary text-white font-bold rounded-xl shadow-[0_0_15px_rgba(139,92,246,0.5)]">
+           Generate Final Report & Advanced AI Insights
+       </button>
+    </div>
+  );
+}
+
+function DownloadQRModal({ onClose }: { onClose: () => void }) {
+  const downloadUrl = window.location.origin + window.location.pathname;
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
+      <div className="bg-surface border border-primary/30 rounded-3xl p-8 w-full max-w-sm relative text-center shadow-[0_0_50px_rgba(0,229,255,0.15)] animate-in fade-in zoom-in-95 duration-200">
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 text-text-dim hover:text-white text-xl font-bold p-2 transition-colors cursor-pointer"
+        >
+          ✕
+        </button>
+        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4 border border-primary/20">
+          <QrCode className="text-primary" size={24} />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">Download CyberAmour</h3>
+        <p className="text-xs text-text-dim leading-relaxed mb-6">
+          Scan this QR code with your mobile device to open & install the CyberAmour app on the go.
+        </p>
+        
+        <div className="bg-white p-5 rounded-2xl inline-block shadow-inner mb-6 mx-auto">
+          <QRCodeSVG value={downloadUrl} size={180} />
+        </div>
+        
+        <div className="space-y-2 text-left bg-surface/40 p-4 rounded-xl border border-border text-xs">
+          <div className="flex gap-2">
+            <span className="text-primary font-bold font-mono">1.</span>
+            <span className="text-text-dim">Open your phone's camera app.</span>
+          </div>
+          <div className="flex gap-2">
+            <span className="text-primary font-bold font-mono">2.</span>
+            <span className="text-text-dim">Point it at the QR code above.</span>
+          </div>
+          <div className="flex gap-2">
+            <span className="text-primary font-bold font-mono">3.</span>
+            <span className="text-text-dim">Tap the browser notification banner to open the app instantly.</span>
+          </div>
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full mt-6 py-3 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl border border-primary/20 transition-all text-sm cursor-pointer"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}

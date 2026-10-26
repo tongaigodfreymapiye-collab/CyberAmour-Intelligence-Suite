@@ -1,0 +1,39 @@
+136:    return () => document.removeEventListener('click', handleGlobalClick);
+227:    return (
+247:    return (
+288:  return (
+535:  return (
+607:  return (
+622:  return (
+638:  return (
+731:    return () => { mounted = false; };
+752:  return (
+1352:    return (
+1500:  return (
+1932:                      return (
+2096:                      return (
+2188:  return (
+2417:  return (
+2546:  return (
+2573:  return (
+2612:  return (
+2695:  return (
+2950:  return (
+2997:  return (
+3013:  return (
+3039:  return (
+3061:        return (
+3077:        return (
+3137:  return (
+3492:  return (
+3838:  return (
+3858:    return () => clearInterval(timer);
+3868:  return (
+3936:  return (
+3995:          return (
+4090:    return () => unsub();
+4102:  return (
+4221:    return () => {
+4226:  return (
+4281:    return () => { isMounted = false; };
+4284:  return (

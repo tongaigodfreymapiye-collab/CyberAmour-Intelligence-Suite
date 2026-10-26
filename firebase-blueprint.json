@@ -1,0 +1,134 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user security profile and settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "securityScore": { "type": "number" },
+        "lastScanAt": { "type": "string", "format": "date-time" },
+        "isPremium": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Breach": {
+      "title": "Breach Record",
+      "description": "Records of password exposure checks.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "source": { "type": "string" },
+        "breachDate": { "type": "string" },
+        "riskLevel": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+        "details": { "type": "string" },
+        "isDarkWeb": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "source"]
+    },
+    "Scan": {
+      "title": "Security Scan",
+      "description": "Phishing, link, and dark web scan results.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "type": { "type": "string", "enum": ["link", "email", "sms", "darkweb", "phishing", "phone", "name"] },
+        "content": { "type": "string" },
+        "summary": { "type": "string" },
+        "findingsCount": { "type": "number" },
+        "findings": { "type": "array" },
+        "maxRisk": { "type": "string" },
+        "riskScore": { "type": "number" },
+        "verdict": { "type": "string", "enum": ["Safe", "Suspicious", "Malicious"] },
+        "analysis": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "type"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "User activity and audit logs.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "metadata": { "type": "object" },
+        "ip": { "type": "string" },
+        "device": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["action", "createdAt"]
+    },
+    "ScoreHistory": {
+      "title": "Score History",
+      "description": "Historical security scores for trend analysis.",
+      "type": "object",
+      "properties": {
+        "score": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["score", "timestamp"]
+    },
+    "VaultItem": {
+      "title": "Vault Item",
+      "description": "Securely stored credentials or documents.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["password", "document", "note"] },
+        "encryptedData": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "encryptedData"]
+    },
+    "Alert": {
+      "title": "Security Alert",
+      "description": "Real-time security notifications.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/users/{uid}/breaches/{breachId}": {
+      "schema": "Breach",
+      "description": "History of breaches found for the user."
+    },
+    "/users/{uid}/scans/{scanId}": {
+      "schema": "Scan",
+      "description": "History of security scans performed by the user."
+    },
+    "/users/{uid}/vault/{itemId}": {
+      "schema": "VaultItem",
+      "description": "User's secure vault items."
+    },
+    "/users/{uid}/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "User-specific security alerts."
+    },
+    "/users/{uid}/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "User activity audit trail."
+    },
+    "/users/{uid}/scoreHistory/{historyId}": {
+      "schema": "ScoreHistory",
+      "description": "Historical security score data."
+    }
+  }
+}
