@@ -211,7 +211,7 @@ export default function App() {
     detectAnomalies
   } = useCyberAmour();
 
-  const isPermanentOwner = user?.emailVerified === true && user.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
+  const isPermanentOwner = user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
   const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
   const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
 
@@ -1647,7 +1647,7 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
   };
 
   const handleAutoRectify = async () => {
-    if (!profile?.isPremium) {
+    if (!profile?.isPremium && !profile?.isOwner) {
       if (createAlert) {
         createAlert('Premium Required', 'Upgrade to a premium subscription to use Auto-Rectify features.', 'low');
       }

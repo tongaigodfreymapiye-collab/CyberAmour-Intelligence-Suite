@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { auth, db, functions, httpsCallable, onAuthStateChanged, doc, getDoc, setDoc, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, Timestamp, User, signInWithPopup, googleProvider, signOut, writeBatch, getDocs, updatePassword, updateProfile, orderBy, limit } from '../firebase';
+import { auth, db, functions, httpsCallable, onAuthStateChanged, doc, getDoc, setDoc, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, Timestamp, User, signInWithPopup, googleProvider, signOut, writeBatch, getDocs, updatePassword, updateProfile, orderBy, limit, runTransaction } from '../firebase';
 import { GoogleGenAI, Type } from '@google/genai';
 import { BillingService } from '../utils/billing';
 
@@ -8,10 +8,80 @@ import { jsonrepair } from 'jsonrepair';
 
 const authenticator = (otplib as any).authenticator;
 
-// Permanent product-owner entitlement. The email must be verified by Firebase Auth.
+// Permanent product-owner entitlement is tied to the exact Firebase-authenticated account email.
+// Password-provider users are separately stopped at the verification screen in App.tsx.
 const OWNER_EMAIL = 'tongaigodfreymapiye@gmail.com';
 const isPermanentOwner = (account: User | null | undefined) =>
-  !!account?.emailVerified && account.email?.trim().toLowerCase() === OWNER_EMAIL;
+  account?.email?.trim().toLowerCase() === OWNER_EMAIL;
+
+const OWNER_DEVICE_LIMIT = 5;
+const OWNER_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const getBrowserDeviceId = () => {
+  const key = 'cyberamour_owner_device_id';
+  let id = window.localStorage.getItem(key);
+  if (!id) {
+    id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(key, id);
+  }
+  return id;
+};
+
+async function releaseOwnerDeviceSession(uid: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const deviceId = window.localStorage.getItem('cyberamour_owner_device_id');
+    if (!deviceId) return;
+    const accessRef = doc(db, 'users', uid, 'deviceAccess', 'active');
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(accessRef);
+      if (!snap.exists()) return;
+      const sessions = Array.isArray(snap.data().sessions) ? snap.data().sessions : [];
+      tx.set(accessRef, { sessions: sessions.filter((session: any) => session.id !== deviceId), updatedAt: Date.now() }, { merge: true });
+    });
+  } catch (error) { console.warn('Could not release owner device session.', error); }
+}
+
+async function enforceOwnerDeviceLimit(account: User) {
+  if (!isPermanentOwner(account) || typeof window === 'undefined') return true;
+  const deviceId = getBrowserDeviceId();
+  const accessRef = doc(db, 'users', account.uid, 'deviceAccess', 'active');
+  const now = Date.now();
+  let otherDeviceCount = 0;
+  const preflight = await getDoc(accessRef);
+  if (preflight.exists()) {
+    const sessions = Array.isArray(preflight.data().sessions) ? preflight.data().sessions : [];
+    const active = sessions.filter((session: any) => Number(session.lastSeen || 0) > now - OWNER_DEVICE_TTL_MS);
+    otherDeviceCount = active.filter((session: any) => session.id !== deviceId).length;
+    if (active.some((session: any) => session.id === deviceId)) otherDeviceCount = active.length - 1;
+    if (otherDeviceCount > 0 && active.length < OWNER_DEVICE_LIMIT) {
+      const proceed = window.confirm(`CyberAmour account notice: you are already logged in on ${otherDeviceCount} other device(s). Continue on this device? You can use up to ${OWNER_DEVICE_LIMIT} devices at a time.`);
+      if (!proceed) { await signOut(auth); return false; }
+    }
+  }
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(accessRef);
+      const raw = snap.exists() && Array.isArray(snap.data().sessions) ? snap.data().sessions : [];
+      const active = raw.filter((session: any) => Number(session.lastSeen || 0) > Date.now() - OWNER_DEVICE_TTL_MS);
+      const existing = active.some((session: any) => session.id === deviceId);
+      if (!existing && active.length >= OWNER_DEVICE_LIMIT) throw new Error('CYBERAMOUR_DEVICE_LIMIT');
+      const next = active.filter((session: any) => session.id !== deviceId);
+      next.push({ id: deviceId, label: (navigator.userAgent || 'Browser').slice(0, 180), lastSeen: Date.now() });
+      tx.set(accessRef, { sessions: next, updatedAt: Date.now() }, { merge: true });
+    });
+    return true;
+  } catch (error: any) {
+    if (error?.message === 'CYBERAMOUR_DEVICE_LIMIT') {
+      window.alert(`CyberAmour device limit reached. This account is already active on ${OWNER_DEVICE_LIMIT} devices. Sign out from one of those devices before signing in here.`);
+      await signOut(auth);
+      return false;
+    }
+    console.error('Could not verify CyberAmour device access.', error);
+    window.alert('CyberAmour could not verify the active-device limit. For your security, this login will be cancelled. Please check your connection and try again.');
+    await signOut(auth);
+    return false;
+  }
+}
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -52,7 +122,17 @@ export function useCyberAmour() {
   const [is2FAVerified, setIs2FAVerified] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    let lastObservedUser: User | null = null;
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u && isPermanentOwner(u)) {
+        const allowed = await enforceOwnerDeviceLimit(u);
+        if (!allowed) return;
+      }
+      if (!u && lastObservedUser && isPermanentOwner(lastObservedUser)) {
+        await releaseOwnerDeviceSession(lastObservedUser.uid);
+      }
+      if (u && isPermanentOwner(u)) window.localStorage.setItem('cyberamour_owner_last_uid', u.uid);
+      lastObservedUser = u;
       setUser(u);
       if (!u) {
         setProfile(null);
@@ -67,6 +147,27 @@ export function useCyberAmour() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!user || !isPermanentOwner(user) || typeof window === 'undefined') return;
+    const refreshDeviceHeartbeat = async () => {
+      try {
+        const deviceId = getBrowserDeviceId();
+        const accessRef = doc(db, 'users', user.uid, 'deviceAccess', 'active');
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(accessRef);
+          const sessions = snap.exists() && Array.isArray(snap.data().sessions) ? snap.data().sessions : [];
+          const active = sessions.filter((session: any) => Number(session.lastSeen || 0) > Date.now() - OWNER_DEVICE_TTL_MS);
+          if (!active.some((session: any) => session.id === deviceId)) return;
+          const next = active.filter((session: any) => session.id !== deviceId);
+          next.push({ id: deviceId, label: (navigator.userAgent || 'Browser').slice(0, 180), lastSeen: Date.now() });
+          tx.set(accessRef, { sessions: next, updatedAt: Date.now() }, { merge: true });
+        });
+      } catch (error) { console.warn('Could not refresh owner device heartbeat.', error); }
+    };
+    const timer = window.setInterval(refreshDeviceHeartbeat, 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

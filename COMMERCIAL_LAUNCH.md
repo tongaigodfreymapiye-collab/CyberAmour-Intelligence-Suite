@@ -29,3 +29,12 @@ The front end and account creation are implemented, but live paid checkout is no
 The verified Firebase Authentication account `tongaigodfreymapiye@gmail.com` is configured in the client as the permanent product-owner account. When this exact account is signed in and Firebase reports its email as verified, the UI derives an owner profile with lifetime premium/business access and no expiry; it does not write a customer-editable premium flag to Firestore. Other customer accounts continue to use their subscription/profile entitlements.
 
 Important: this client-side owner entitlement controls the UI only. Before a commercial launch, enforce owner/admin and subscription entitlements on every protected Cloud Function and data resource using Firebase Admin SDK custom claims and/or verified server-side subscription records. Never trust a client-supplied `isOwner`, `isPremium`, or role field. Test owner access using the verified owner account and test customer access with a separate account.
+
+
+## Product-owner premium and device access
+
+The exact Firebase-authenticated account email `tongaigodfreymapiye@gmail.com` receives the product-owner profile override (`isOwner`, lifetime premium/business tier, no expiry) so premium UI gates such as Auto-Rectify do not show a subscription prompt. Customer accounts continue to use their own subscription records.
+
+The owner account is limited to five active browser profiles/devices. A new browser session warns when other devices are active; a sixth distinct device is rejected. Device sessions use a Firestore transaction ledger at `users/{uid}/deviceAccess/active`, refresh their heartbeat every five minutes, and are released on sign-out. Sessions inactive for 30 days are treated as stale. The Firestore rules in `firestore.rules` must be published to the configured Firebase project for the device ledger to work.
+
+Important: this browser/device ledger is an application-level limit, not hardware attestation; clearing browser storage can make one browser appear as a new device. For stronger commercial enforcement, move device admission to a trusted Cloud Function and apply server-side entitlement checks to every protected backend feature.

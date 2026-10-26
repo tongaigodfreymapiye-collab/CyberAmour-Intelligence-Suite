@@ -217,6 +217,11 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
 
+      // Owner device-session ledger. Used only for the product owner's five-device limit.
+      match /deviceAccess/{accessId} {
+        allow read, create, update, delete: if isOwner(userId) && accessId == 'active';
+      }
+
       match /scoreHistory/{historyId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidScoreHistory(request.resource.data);
