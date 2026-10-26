@@ -38,3 +38,12 @@ The exact Firebase-authenticated account email `tongaigodfreymapiye@gmail.com` r
 The owner account is limited to five active browser profiles/devices. A new browser session warns when other devices are active; a sixth distinct device is rejected. Device sessions use a Firestore transaction ledger at `users/{uid}/deviceAccess/active`, refresh their heartbeat every five minutes, and are released on sign-out. Sessions inactive for 30 days are treated as stale. The Firestore rules in `firestore.rules` must be published to the configured Firebase project for the device ledger to work.
 
 Important: this browser/device ledger is an application-level limit, not hardware attestation; clearing browser storage can make one browser appear as a new device. For stronger commercial enforcement, move device admission to a trusted Cloud Function and apply server-side entitlement checks to every protected backend feature.
+
+
+## Navigation cleanup and product structure
+
+The main navigation has been simplified around the primary security workflows: Security Overview, Risk Assessments, GRC & Controls, Threat Intelligence & OSINT, Security Scans, Dark Web Exposure, Network & Device, Investigations & Evidence, Reports & Action Plans, and Tasks & Remediation. Account and support actions are grouped separately. Redundant top-level entries such as Key Features and World Clock have been removed from the sidebar; their underlying components are retained, and the dashboard still includes the compact clock widget.
+
+Risk Assessments and GRC remain separate because they serve different purposes. Investigation Cases is presented as Investigations & Evidence, and Cyber Forensics is labelled Security Scans to make its scanning workflow clearer. AI is labelled AI Security Assistant. Alerts are presented as Notifications. The dashboard title is Security Overview. These changes reorganise navigation and labels; they do not claim that placeholder integrations or simulated monitoring are production-ready.
+
+The owner entitlement is granted in the client only when Firebase Auth reports the exact owner email as verified. The owner-only five-device ledger uses Firestore under the user's own `deviceAccess/active` document. Publish the repository's Firestore rules to the correct Firebase project and test login, denial, release, and stale-session cases before relying on this limit. Because the ledger is client-driven, it is not a substitute for a trusted server-side session broker against a determined attacker.

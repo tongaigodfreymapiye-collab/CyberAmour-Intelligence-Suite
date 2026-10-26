@@ -211,7 +211,7 @@ export default function App() {
     detectAnomalies
   } = useCyberAmour();
 
-  const isPermanentOwner = user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
+  const isPermanentOwner = user?.emailVerified === true && user.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
   const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
   const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
 
@@ -412,29 +412,27 @@ export default function App() {
         </div>
         <div className="text-[10px] text-text-dim uppercase tracking-widest mb-12">Digital intelligence, protected.</div>
         
-        <nav className="flex-1">
+        <nav className="flex-1 overflow-y-auto pr-1">
           <ul className="space-y-2">
-            <SidebarItem active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={18} />} label="Dashboard" />
-            <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Cyber Forensics" />
-            <SidebarItem active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={18} />} label="Risk Intelligence" />
-            <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC Assessments" />
-            <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="OSINT Workspace" />
-            <SidebarItem active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={18} />} label="Investigation Cases" />
-            <SidebarItem active={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} icon={<FileText size={18} />} label="Risk Reports" />
+            <li className="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-text-dim">Security workspace</li>
+            <SidebarItem active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={18} />} label="Security Overview" />
+            <SidebarItem active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={18} />} label="Risk Assessments" />
+            <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC & Controls" />
+            <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="Threat Intelligence & OSINT" />
+            <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Security Scans" />
+            <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Dark Web Exposure" />
             <SidebarItem active={activeScreen === 'network'} onClick={() => setActiveScreen('network')} icon={<Network size={18} />} label="Network & Device" />
-            <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Dark Web Monitor" />
-            <SidebarItem active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={18} />} label="AI Assistant" />
-            <SidebarItem active={activeScreen === 'features'} onClick={() => setActiveScreen('features')} icon={<Star size={18} className="text-accent"/>} label="Key Features" />
-            <SidebarItem active={activeScreen === 'guide'} onClick={() => setActiveScreen('guide')} icon={<BookOpen size={18} className="text-success" />} label="User Guide" />
-            <SidebarItem active={activeScreen === 'tasks'} onClick={() => setActiveScreen('tasks')} icon={<CheckSquare size={18} />} label="Task Manager" />
-            <SidebarItem active={activeScreen === 'clock'} onClick={() => setActiveScreen('clock')} icon={<Clock size={18} />} label="World Clock" />
-            <SidebarItem active={activeScreen === 'alerts'} onClick={() => setActiveScreen('alerts')} icon={<Bell size={18} />} label="Alerts Feed" />
-            <SidebarItem active={activeScreen === 'pricing'} onClick={() => setActiveScreen('pricing')} icon={<CreditCard size={18} />} label="Upgrade" />
-            {isPermanentOwner && (
-              <SidebarItem active={activeScreen === 'admin'} onClick={() => setActiveScreen('admin')} icon={<ShieldAlert size={18} />} label="Admin Queue" />
-            )}
-            <SidebarItem active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={18} />} label="Settings" />
-            <SidebarItem active={false} onClick={() => setShowTutorial(true)} icon={<HelpCircle size={18} />} label="Tutorials" />
+            <SidebarItem active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={18} />} label="Investigations & Evidence" />
+            <SidebarItem active={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} icon={<FileText size={18} />} label="Reports & Action Plans" />
+            <SidebarItem active={activeScreen === 'tasks'} onClick={() => setActiveScreen('tasks')} icon={<CheckSquare size={18} />} label="Tasks & Remediation" />
+            <li className="px-3 pt-5 pb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-text-dim">Account & support</li>
+            <SidebarItem active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={18} />} label="AI Security Assistant" />
+            <SidebarItem active={activeScreen === 'alerts'} onClick={() => setActiveScreen('alerts')} icon={<Bell size={18} />} label="Notifications" />
+            <SidebarItem active={activeScreen === 'guide'} onClick={() => setActiveScreen('guide')} icon={<BookOpen size={18} className="text-success" />} label="User Guide & Help" />
+            <SidebarItem active={activeScreen === 'pricing'} onClick={() => setActiveScreen('pricing')} icon={<CreditCard size={18} />} label="Plan & Billing" />
+            <SidebarItem active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={18} />} label="Settings & Devices" />
+            {isPermanentOwner && <SidebarItem active={activeScreen === 'admin'} onClick={() => setActiveScreen('admin')} icon={<ShieldAlert size={18} />} label="Administration" />}
+            <SidebarItem active={false} onClick={() => setShowTutorial(true)} icon={<HelpCircle size={18} />} label="Launch Tutorial" />
           </ul>
         </nav>
 
@@ -597,13 +595,11 @@ export default function App() {
       </aside>
 
       {/* Mobile Nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-xl border-t border-border px-6 py-3 flex justify-between items-center z-50">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-xl border-t border-border px-3 py-3 flex justify-around items-center z-50">
         <NavButton active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={20} />} label="Home" />
-        <NavButton active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={20} />} label="Forensics" />
+        <NavButton active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={20} />} label="OSINT" />
         <NavButton active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={20} />} label="Risk" />
-        <NavButton active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={20} />} label="AI" />
-        <NavButton active={activeScreen === 'features'} onClick={() => setActiveScreen('features')} icon={<Star size={20} className="text-accent"/>} label="Features" />
-        <NavButton active={activeScreen === 'tasks'} onClick={() => setActiveScreen('tasks')} icon={<CheckSquare size={20} />} label="Tasks" />
+        <NavButton active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={20} />} label="Cases" />
         <NavButton active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={20} />} label="Menu" />
       </nav>
 
@@ -1647,7 +1643,7 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
   };
 
   const handleAutoRectify = async () => {
-    if (!profile?.isPremium && !profile?.isOwner) {
+    if (!isPermanentOwner && !profile?.isPremium && !profile?.isOwner) {
       if (createAlert) {
         createAlert('Premium Required', 'Upgrade to a premium subscription to use Auto-Rectify features.', 'low');
       }
@@ -1740,7 +1736,7 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
       className="space-y-10"
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <h2 className="text-3xl font-bold tracking-tight">Protection Overview</h2>
+        <h2 className="text-3xl font-bold tracking-tight">Security Overview</h2>
         <div className="flex items-center gap-3 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide">
           <button 
             onClick={handleAutoRectify}

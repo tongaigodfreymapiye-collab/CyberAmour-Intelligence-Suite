@@ -12,7 +12,7 @@ const authenticator = (otplib as any).authenticator;
 // Password-provider users are separately stopped at the verification screen in App.tsx.
 const OWNER_EMAIL = 'tongaigodfreymapiye@gmail.com';
 const isPermanentOwner = (account: User | null | undefined) =>
-  account?.email?.trim().toLowerCase() === OWNER_EMAIL;
+  account?.emailVerified === true && account.email?.trim().toLowerCase() === OWNER_EMAIL;
 
 const OWNER_DEVICE_LIMIT = 5;
 const OWNER_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
