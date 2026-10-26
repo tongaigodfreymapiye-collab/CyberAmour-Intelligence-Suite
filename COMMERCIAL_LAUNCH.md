@@ -70,3 +70,22 @@ A normal browser cannot enumerate the user's full file system, inspect running p
 ## Deployment / live-data warning
 
 The browser app currently contains legacy Gemini client calls and Vite configuration that can expose `GEMINI_API_KEY` in a public build. Before a public commercial release, move Gemini calls to authenticated Cloud Functions and remove the key from client-side Vite defines; rotate any key that has already been exposed. OSINT outputs should retain actual Google Search grounding sources and must clearly label unavailable data. A GitHub Pages frontend does not itself provide endpoint antivirus, LAN discovery, or process blocking.
+
+
+## Live OSINT and AI provider configuration
+
+The OSINT callable `analyzeCyberIntel` queries VirusTotal for supported domain, IP, URL and hash indicators; AbuseIPDB for IP reputation; and AlienVault OTX for indicator context when those provider secrets are configured. Gemini AI is invoked server-side and Google Search grounding sources are returned where available. Unconfigured providers are reported as unavailable, not as clean results.
+
+Configure secrets in the Firebase project used by this app (never in Vite or the public GitHub repository):
+
+```bash
+firebase functions:secrets:set GEMINI_API_KEY
+firebase functions:secrets:set VIRUSTOTAL_API_KEY
+firebase functions:secrets:set ABUSEIPDB_API_KEY
+firebase functions:secrets:set ALIENVAULT_OTX_API_KEY
+firebase deploy --only functions
+```
+
+VirusTotal's public/community API has terms and rate limits that may prohibit commercial use; obtain a plan/license that permits your intended product before selling VirusTotal-backed features. AbuseIPDB and AlienVault OTX require their own accounts/API keys. A missing key means that source is not queried. Review each provider's current terms and limits.
+
+The browser's OSINT and assistant calls are routed through authenticated Cloud Functions; do not reintroduce a Gemini key in `vite.config.ts`, frontend environment variables, or built assets. Other legacy client AI operations now use the authenticated `cyberAmourGenerateContent` proxy. Add rate limits, quotas, abuse monitoring and cost controls before open commercial access.

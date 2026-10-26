@@ -55,3 +55,8 @@ Review Firebase authentication, Firestore security rules, data retention, tenant
 - Cloud Functions deployment requires the Firebase Blaze billing plan. Test Stripe in test mode first. See `docs/COMMERCIAL_LAUNCH.md`.
 
 **Important production security:** The browser bundle must not contain Gemini/server API secrets. This project has client-side AI code from the earlier implementation; move AI calls behind a protected backend and rotate any key that may have been exposed before commercial launch.
+
+
+## Live OSINT and AI deployment
+
+See [LIVE-OSINT-AI-SETUP.md](LIVE-OSINT-AI-SETUP.md) for Firebase secret setup, real threat-intelligence providers, commercial licensing notes, deployment steps, and release checks. API keys must remain server-side.

@@ -211,7 +211,7 @@ export default function App() {
     detectAnomalies
   } = useCyberAmour();
 
-  const isPermanentOwner = user?.emailVerified === true && user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
+  const isPermanentOwner = user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
   const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
   const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
 
@@ -430,7 +430,7 @@ export default function App() {
             <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="Threat Intelligence & OSINT" />
             <SidebarItem active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={18} />} label="Antivirus & File Scan" />
             <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Security Scans" />
-            <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Dark Web Exposure" />
+            <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Public Breach Intelligence" />
             <SidebarItem active={activeScreen === 'network'} onClick={() => setActiveScreen('network')} icon={<Network size={18} />} label="Network & Device" />
             <SidebarItem active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={18} />} label="Investigations & Evidence" />
             <SidebarItem active={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} icon={<FileText size={18} />} label="Reports & Action Plans" />
@@ -1008,7 +1008,7 @@ function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
                <div className="ml-auto flex items-center gap-2">
                  <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Risk Score</div>
                  <div className={cn("text-xl font-bold", result.riskScore >= 70 ? 'text-danger' : result.riskScore >= 40 ? 'text-accent' : 'text-success')}>
-                   {result.riskScore}/100
+                   {typeof result.riskScore === 'number' ? `${result.riskScore}/100` : 'Not scored'}
                  </div>
                </div>
             </div>
@@ -1057,45 +1057,16 @@ function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
 }
 
 function ScanTimeline({ result, scanType }: any) {
-  // Generate a mock timeline based on the result
-  const events = [];
-  events.push({ time: "00:00", text: `Initialized ${scanType} analysis engine.` });
-  events.push({ time: "00:02", text: `Connected to global threat intelligence databases.` });
-  
-  if (result.type === 'breach' && result.found?.length > 0) {
-    events.push({ time: "00:05", text: `Scanning dark web repositories for credentials.` });
-    events.push({ time: "00:08", text: `Match found in known data breaches.` });
-  } else if (result.verdict === 'Safe' || result.verdict === 'Clean') {
-    events.push({ time: "00:06", text: `Cross-referencing signatures and behavioral patterns.` });
-    events.push({ time: "00:10", text: `No malicious indicators detected.` });
-  } else {
-    events.push({ time: "00:05", text: `Analyzing structure and extracting metadata.` });
-    if (result.redFlags && result.redFlags.length > 0) {
-      events.push({ time: "00:07", text: `Flagged suspicious configurations: ${result.redFlags.length} indicator(s).` });
-    }
-    events.push({ time: "00:11", text: `Threat assessment concluded with risk score: ${result.riskScore}.` });
-  }
-  
-  return (
-    <div className="mt-6 border-t border-border pt-4">
-      <h5 className="text-xs font-bold uppercase tracking-wider text-text-dim mb-4 flex items-center gap-2">
-        <Clock size={14} /> Scan Execution Timeline
-      </h5>
-      <div className="space-y-4 relative before:absolute before:inset-0 before:left-[11px] before:-translate-x-px before:h-full before:w-0.5 before:bg-border/50">
-        {events.map((evt, idx) => (
-          <div key={idx} className="relative flex items-start gap-4 text-sm z-10">
-            <div className="w-6 h-6 rounded-full bg-surface border-2 border-border flex items-center justify-center shrink-0 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] text-primary font-bold uppercase tracking-widest">{evt.time}</span>
-              <span className="text-text-main text-xs">{evt.text}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+  const collectedAt = result?.collectedAt || result?.createdAt;
+  const sources = Array.isArray(result?.sources) ? result.sources : [];
+  return <div className="mt-6 border-t border-border pt-4">
+    <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Evidence and collection details</h4>
+    <div className="mt-3 space-y-3 text-sm">
+      <div className="flex gap-3"><span className="mt-1 h-2 w-2 rounded-full bg-primary"/><div><b>Analysis type</b><div className="text-text-dim">{String(scanType || result?.type || 'Security review')}</div></div></div>
+      {collectedAt && <div className="flex gap-3"><span className="mt-1 h-2 w-2 rounded-full bg-primary"/><div><b>Result collected</b><div className="text-text-dim">{new Date(collectedAt).toLocaleString()}</div></div></div>}
+      <div className="flex gap-3"><span className="mt-1 h-2 w-2 rounded-full bg-primary"/><div><b>Source evidence</b><div className="text-text-dim">{sources.length ? `${sources.length} source link(s) returned` : 'No source links were returned. Verify configuration; absence of sources is not a clean verdict.'}</div></div></div>
     </div>
-  );
+  </div>;
 }
 
 function RealtimeAlerts({ alerts }: { alerts: any[] }) {
@@ -1217,7 +1188,6 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
   const [result, setResult] = useState<any>(null);
   const [draftResult, setDraftResult] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [useCyberAmour, setUseCyberAmour] = useState(false);
 
   const handleScan = async () => {
     if (!searchInput) return;
@@ -1226,9 +1196,6 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
     setErrorMsg(null);
     setScanProgress(0);
     
-    const progressInterval = setInterval(() => {
-      setScanProgress(prev => Math.min(prev + (Math.random() * 12 + 3), 98));
-    }, 150);
 
     let typeToScan: any = 'name';
     const trimmed = searchInput.trim();
@@ -1240,26 +1207,18 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
       typeToScan = 'company';
     }
 
-    const payload = useCyberAmour 
-      ? `${trimmed} [Simulate CyberAmour Free Repositories to access publicly available information and extract transform data. Analyze and interpret these results to establish relationships between entities. Reflect these relationships extensively in Associated Companies and Digital Inconsistencies.]`
-      : trimmed;
+    const payload = trimmed;
 
     try {
       const res = await performScan(typeToScan, payload);
       setDraftResult(res);
     } catch (e: any) {
-      if (e.message === 'LIMIT_REACHED') {
-        if (typeToScan === 'phone') {
-          setErrorMsg("You've used your 3 free Phone Scans. Upgrade to a subscription-based membership to access premium features.");
-        } else {
-          setErrorMsg("You've used your 5 free Cyber Forensics scans. Upgrade to a subscription-based membership to access premium features.");
-        }
-      }
+      if (e.message === 'LIMIT_REACHED') setErrorMsg("You've used the included scan allowance for this account.");
+      else setErrorMsg(e?.message || 'The live analysis could not be completed. No result has been assumed.');
       console.error(e);
     } finally {
-      clearInterval(progressInterval);
-      setScanProgress(100);
-      setTimeout(() => setScanning(false), 500);
+      setScanProgress(0);
+      setScanning(false);
     }
   };
 
@@ -1270,7 +1229,7 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
           <motion.div 
             className="h-full bg-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.8)]"
             initial={{ width: "0%" }}
-            animate={{ width: `${scanProgress}%` }}
+            animate={{ width: "35%" }}
             transition={{ ease: "linear" }}
           />
         </div>
@@ -1282,7 +1241,7 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
           </div>
           <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Global Phone & Identity Lookup</h4>
         </div>
-        {scanning && <span className="text-xs font-bold text-[#3B82F6]">{Math.round(scanProgress)}%</span>}
+        {scanning && <span className="text-xs font-bold text-[#3B82F6]">Waiting for live sources…</span>}
       </div>
       <div className="flex flex-col md:flex-row gap-4 relative z-10">
         <div className="flex-1 flex gap-2">
@@ -1321,30 +1280,10 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
       
       <div className="flex flex-col gap-3 relative z-10 pl-1 mt-3">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setUseCyberAmour(!useCyberAmour)}
-            className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-[#3B82F6] focus:ring-offset-2 focus:ring-offset-bg"
-            role="switch"
-            aria-checked={useCyberAmour}
-          >
-            <span className="sr-only">Simulate using CyberAmour free repositories</span>
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none absolute h-full w-full rounded-md ${useCyberAmour ? 'bg-[#3B82F6]' : 'bg-surface border border-border'} transition-colors mx-auto`}
-            />
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none absolute left-0 inline-block h-5 w-5 transform rounded-full border border-border bg-white shadow ring-0 transition-transform ${useCyberAmour ? 'translate-x-4' : 'translate-x-0'}`}
-            />
-          </button>
-          <span className="text-xs text-text-dim">Simulate CyberAmour Repositories</span>
-        </div>
-        
-        <div className="flex items-center gap-2">
            <div className="bg-[#3B82F6]/20 p-1 rounded border border-[#3B82F6]/30">
                <svg className="w-3 h-3 text-[#3B82F6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
            </div>
-           <span className="text-xs text-text-dim">Global Phone Lookup utilizes True Caller Network & Public Directories.</span>
+           <span className="text-xs text-text-dim">Public-source results depend on configured live providers. No private phone directory is accessed.</span>
         </div>
       </div>
 
@@ -1386,12 +1325,12 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
                </div>
                <div>
                   <div className="text-sm font-bold">{result.verdict}</div>
-                  <div className="text-xs text-text-dim capitalize">{searchInput.includes('@') ? 'Email Analysis' : searchInput.match(/^[0-9\+\-\(\)\s]+$/) ? 'Phone Number Analysis (True Caller Network)' : 'Identity Analysis'}</div>
+                  <div className="text-xs text-text-dim capitalize">{searchInput.includes('@') ? 'Email Analysis' : searchInput.match(/^[0-9\+\-\(\)\s]+$/) ? 'Phone Number Public-Source Review' : 'Identity Analysis'}</div>
                </div>
                <div className="ml-auto flex items-center gap-2">
                  <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Risk Score</div>
                  <div className={cn("text-xl font-bold", result.riskScore >= 70 ? 'text-danger' : result.riskScore >= 40 ? 'text-accent' : 'text-success')}>
-                   {result.riskScore}/100
+                   {typeof result.riskScore === 'number' ? `${result.riskScore}/100` : 'Not scored'}
                  </div>
                </div>
             </div>
@@ -1781,14 +1720,14 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
     setIsDetecting(false);
   };
 
-  const score = profile?.securityScore || 0;
+  const score = profile?.securityScoreSource === 'validated-assessment' && typeof profile?.securityScore === 'number' ? profile.securityScore : null;
   const getScoreColor = (s: number) => {
     if (s >= 80) return 'text-success';
     if (s >= 50) return 'text-accent';
     return 'text-danger';
   };
 
-  const riskScore = 100 - score;
+  const riskScore = score === null ? null : 100 - score;
 
   const COLORS = ['#00E5FF', '#8A2BE2', '#FFB020', '#FF3B30', '#00C853'];
 
@@ -1836,56 +1775,26 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
                 cx="96" cy="96" r="86" stroke="url(#riskGradient)" strokeWidth="10" fill="transparent" strokeLinecap="round"
                 strokeDasharray={540.35}
                 initial={{ strokeDashoffset: 540.35 }}
-                animate={{ strokeDashoffset: 540.35 - (540.35 * riskScore) / 100 }}
+                animate={{ strokeDashoffset: riskScore === null ? 540.35 : 540.35 - (540.35 * riskScore) / 100 }}
                 transition={{ duration: 1.5, ease: "easeOut" }}
               />
             </svg>
             <div className="absolute flex flex-col items-center justify-center">
               <span className="text-[10px] text-text-dim uppercase tracking-widest font-semibold mb-1">Risk Score</span>
-              <span className="text-5xl font-black cyber-gradient bg-clip-text text-transparent drop-shadow-md">{riskScore}</span>
+              <span className="text-5xl font-black cyber-gradient bg-clip-text text-transparent drop-shadow-md">{riskScore === null ? '—' : riskScore}</span>
               <span className={cn("text-xs font-bold uppercase mt-1 px-2 py-0.5 rounded", 
-                riskScore > 75 ? "bg-danger/20 text-danger" : 
+                riskScore === null ? "bg-surface text-text-dim" : riskScore > 75 ? "bg-danger/20 text-danger" : 
                 riskScore > 30 ? "bg-accent/20 text-accent" : "bg-success/20 text-success")}
               >
-                {riskScore > 75 ? "Critical" : riskScore > 30 ? "Elevated" : "Low Risk"}
+                {riskScore === null ? 'Not assessed' : riskScore > 75 ? "Critical" : riskScore > 30 ? "Elevated" : "Low Risk"}
               </span>
             </div>
           </div>
 
-          <div className="w-full space-y-3 mt-4">
-            <h4 className="text-[10px] uppercase tracking-widest text-text-dim text-center mb-4">Score Breakdown</h4>
-            {[
-              { label: 'Password Strength', max: 30, value: Math.round(score * 0.30), icon: <Lock size={14} />, desc: 'Complexity and rotation' },
-              { label: 'Network Activity', max: 20, value: Math.round(score * 0.20), icon: <Network size={14} />, desc: 'Encryption and traffic' },
-              { label: 'Device Settings', max: 20, value: Math.round(score * 0.20), icon: <Smartphone size={14} />, desc: '2FA and configuration' },
-              { label: 'Breach History', max: 30, value: score - Math.round(score * 0.30) - Math.round(score * 0.20) - Math.round(score * 0.20), icon: <ShieldAlert size={14} />, desc: 'Known leaks and exposures' }
-            ].map((item, i) => (
-               <div key={i} className="flex flex-col gap-1.5 p-3 bg-surface/40 border border-border/50 rounded-xl relative overflow-hidden group hover:bg-surface/60 transition-colors">
-                 <div className="absolute top-0 right-0 p-3 opacity-10 transform translate-x-2 -translate-y-2 group-hover:scale-110 transition-transform">
-                   {item.icon}
-                 </div>
-                 <div className="flex justify-between items-end relative z-10">
-                   <div className="flex flex-col">
-                     <div className="flex items-center gap-1.5 mb-1">
-                       <span className="text-[11px] font-bold text-text-main leading-none">{item.label}</span>
-                     </div>
-                     <span className="text-[9px] text-text-dim">{item.desc}</span>
-                   </div>
-                   <div className="flex items-baseline gap-1">
-                     <span className={cn("font-black text-sm leading-none", getScoreColor((item.value / item.max) * 100))}>+{item.value}</span>
-                     <span className="text-[10px] text-text-dim font-medium">/ {item.max} pts</span>
-                   </div>
-                 </div>
-                 <div className="w-full h-1.5 bg-background rounded-full overflow-hidden mt-1 relative z-10 border border-border/30">
-                   <motion.div 
-                     initial={{ width: 0 }}
-                     animate={{ width: `${(item.value / item.max) * 100}%` }}
-                     transition={{ duration: 1.5, ease: "easeOut", delay: i * 0.1 }}
-                     className={cn("h-full rounded-full", (item.value / item.max) * 100 >= 80 ? 'bg-success' : (item.value / item.max) * 100 >= 50 ? 'bg-accent' : 'bg-danger')} 
-                   />
-                 </div>
-               </div>
-            ))}
+          <div className="w-full space-y-3 mt-4 rounded-xl border border-border bg-surface/30 p-4">
+            <h4 className="text-[10px] uppercase tracking-widest text-text-dim text-center mb-2">Score methodology</h4>
+            <p className="text-xs leading-5 text-text-dim text-center">{riskScore === null ? 'No validated overall security score is available yet. Complete an evidence-based risk assessment to establish a baseline.' : 'This score is sourced from a recorded validated assessment. Individual category breakdowns are not available unless each category was measured separately.'}</p>
+            <button onClick={() => setActiveScreen('risk')} className="w-full rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/20">Open Risk Assessment</button>
           </div>
         </div>
 
@@ -1948,133 +1857,8 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
           <h3 className="text-xl font-bold">Global Threat Intelligence</h3>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Mitre ATT&CK & STRIDE Distribution */}
-          <div className="glass-card p-6 space-y-6 min-w-0">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Threat Frameworks</h4>
-              <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded">ATT&CK / STRIDE / OWASP</span>
-            </div>
-            <div className="h-[250px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={globalThreats.mitreAttack.concat(globalThreats.stride).concat(globalThreats.owasp)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="tactic" hide />
-                  <XAxis dataKey="threat" hide />
-                  <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0E1228', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: '#FFFFFF', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="count" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-3 gap-4 text-[10px] text-text-dim">
-              <div className="space-y-1">
-                <div className="font-bold text-text-main">Mitre ATT&CK</div>
-                {globalThreats.mitreAttack.map((m: any) => (
-                  <div key={m.tactic} className="flex justify-between">
-                    <span className="truncate mr-1">{m.tactic}</span>
-                    <span className="text-primary">{m.count}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-1">
-                <div className="font-bold text-text-main">STRIDE</div>
-                {globalThreats.stride.map((s: any) => (
-                  <div key={s.threat} className="flex justify-between">
-                    <span className="truncate mr-1">{s.threat}</span>
-                    <span className="text-secondary">{s.count}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-1">
-                <div className="font-bold text-text-main">OWASP Top 10</div>
-                {globalThreats.owasp.map((o: any) => (
-                  <div key={o.risk} className="flex justify-between">
-                    <span className="truncate mr-1">{o.risk}</span>
-                    <span className="text-accent">{o.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Compliance & Data Breach Risks */}
-          <div className="glass-card p-6 space-y-6 min-w-0">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Compliance Risk (ISO/NIST/GDPR)</h4>
-              <button 
-                onClick={() => setShowComplianceInfo(true)}
-                className="p-1.5 hover:bg-white/5 rounded-lg transition-colors group"
-                title="View Compliance Details"
-              >
-                <FileText className="text-accent group-hover:scale-110 transition-transform" size={18} />
-              </button>
-            </div>
-            <div className="h-[250px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={globalThreats.compliance}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="violations"
-                  >
-                    {globalThreats.compliance.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#0E1228', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                    itemStyle={{ color: '#FFFFFF', fontSize: '12px' }}
-                  />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-3">
-              {globalThreats.compliance.map((c: any) => (
-                <div key={c.standard} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("w-2 h-2 rounded-full", c.status === 'Critical' ? 'bg-danger' : 'bg-accent')} />
-                    <span className="font-bold">{c.standard}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-text-dim">{c.violations} Violations</span>
-                    <span className={cn("px-2 py-0.5 rounded text-[10px]", c.status === 'Critical' ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent')}>
-                      {c.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Real-time Threat Distribution Map (Simplified) */}
-        <div className="glass-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="text-success" size={18} />
-              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Real-time Regional Distribution</h4>
-            </div>
-            <span className="text-[10px] text-success animate-pulse">● LIVE FEED</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {globalThreats.regions.map((r: any) => (
-              <div key={r.name} className="bg-bg/50 p-3 rounded-xl border border-border text-center space-y-1">
-                <div className="text-[10px] text-text-dim uppercase tracking-tighter">{r.name}</div>
-                <div className="text-lg font-bold text-primary">{r.threats.toLocaleString()}</div>
-                <div className="text-[8px] text-success">Active Scans</div>
-              </div>
-            ))}
-          </div>
-          <ThreatMap />
+        <div className="rounded-xl border border-border bg-surface/30 p-4 text-sm text-text-dim">
+          Framework incident counts, compliance violation totals, and regional attack counts are not connected to verified live telemetry, so they are intentionally not displayed. The live summary below uses server-side Google Search grounding when configured and includes source references where returned.
         </div>
 
         {/* AI Threat Intel Summary */}
@@ -2135,17 +1919,17 @@ function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceInte
               <div className="bg-danger/20 p-2 rounded-xl border border-danger/30">
                 <Ghost size={18} className="text-danger" />
               </div>
-              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Dark Web Data Exposures</h4>
+              <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Public Breach Intelligence</h4>
             </div>
             <button 
                onClick={() => setActiveScreen('darkweb')}
                className="text-xs bg-danger/10 text-danger border border-danger/20 px-4 py-2 rounded-xl hover:bg-danger/20 transition-colors font-bold uppercase tracking-widest"
             >
-              Open Dark Web Monitor
+              Open Public Breach Intelligence
             </button>
           </div>
           <div className="text-sm text-text-dim max-w-xl">
-             Continuously scan the dark web, hacker forums, and ransomware leak sites to detect if your personal information or credentials have been exposed in any breaches online.
+             Search configured public sources for published breach notices and reputable cybersecurity reporting. This is not continuous dark-web monitoring and does not access private leak sites.
           </div>
         </div>
         <QuickUrlScanner performScan={performScan} setActiveScreen={setActiveScreen} />
@@ -2548,35 +2332,25 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
     const logInputName = finalType === 'file' ? imageFile?.name || 'file' : finalType === 'antivirus' ? 'device' : finalInput.substring(0, 10);
     logActivity('scan_started', { type: finalType, input: logInputName + '...', urgency });
     
-    // Adjust scan speed based on urgency just for simulated effect
-    const speedMultiplier = urgency === 'High' ? 1.5 : urgency === 'Low' ? 0.6 : 1;
-    
     const scanPhases = {
-      phishing: ["Extracting text features...", "Analyzing sentence structure...", "Detecting persuasive elements...", "Cross-referencing scam patterns...", "Evaluating payload and links...", "Finalizing threat assessment..."],
-      email: ["Verifying format and syntax...", "Checking DNS MX records...", "Analyzing Sender Reputation...", "Validating SPF/DKIM/DMARC...", "Searching known breach databases...", "Scanning dark web markets...", "Compiling CyberAmour comprehensive report..."],
-      sms: ["Extracting message content...", "Checking sender against spam lists...", "Analyzing embedded hooks/links...", "Detecting smishing patterns...", "Evaluating urgency signals...", "Finalizing risk score..."],
-      phone: ["Formatting international number...", "Querying robocall registries...", "Checking carrier blocklists...", "Searching fraud complaint networks...", "Analyzing reputation score...", "Identifying related malicious activity..."],
-      name: ["Initializing comprehensive search...", "Scanning public records...", "Checking social media footprints...", "Cross-referencing known aliases...", "Searching data leak dumps...", "Generating identity credibility profile..."],
-      company: ["Retrieving corporate registration...", "Checking financial blacklists...", "Analyzing domain association...", "Searching scam reports...", "Validating business authenticity...", "Compiling CyberAmour comprehensive report..."],
-      username: ["Searching common platforms...", "Checking forum registrations...", "Analyzing dark web mentions...", "Identifying linked personas...", "Generating credibility score..."],
-      domain: ["Analyzing domain syntax...", "Checking WHOIS registration...", "Validating DNS records...", "Scanning for typosquatting...", "Checking URL reputation engines...", "Detecting blacklisted IPs..."],
-      url: ["Extracting URL components...", "Analyzing path and parameters...", "Checking domain reputation...", "Detecting obfuscation...", "Tracing redirection chain...", "Validating SSL certificate...", "Checking anti-phishing lists..."],
-      antivirus: ["Initializing heuristics engine...", "Analyzing binary signature...", "Checking for rootkits & APTs...", "Simulating execution in sandbox...", "Evaluating for obfuscation...", "Detecting zero-day threats...", "Finalizing behavioral assessment..."],
-      default: ["Initializing scan...", "Querying global intel feeds...", "Cross-referencing databases...", "Analyzing patterns with AI...", "Finalizing assessment..."]
+      phishing: ["Preparing supplied content...", "Querying configured live sources...", "Reviewing returned evidence...", "Preparing report..."],
+      email: ["Validating input...", "Querying configured live sources...", "Reviewing source evidence...", "Preparing report..."],
+      sms: ["Reviewing supplied message...", "Checking supported reputation sources...", "Preparing evidence-based report..."],
+      phone: ["Validating phone-number format...", "Querying configured public-source services...", "Preparing report..."],
+      name: ["Preparing authorized public-source query...", "Searching configured sources...", "Validating returned references...", "Preparing report..."],
+      company: ["Preparing organization query...", "Searching configured public sources...", "Reviewing evidence...", "Preparing report..."],
+      username: ["Preparing public username query...", "Searching configured sources...", "Validating references...", "Preparing report..."],
+      domain: ["Validating domain...", "Querying configured reputation providers...", "Reviewing returned indicators...", "Preparing report..."],
+      url: ["Validating URL...", "Querying configured reputation providers...", "Reviewing returned indicators...", "Preparing report..."],
+      antivirus: ["Preparing file reputation check...", "Checking configured hash reputation provider...", "Preparing report..."],
+      default: ["Preparing request...", "Querying configured services...", "Reviewing returned evidence...", "Preparing report..."]
     };
     const phaseList = scanPhases[finalType as keyof typeof scanPhases] || scanPhases.default;
     setCurrentPhases(phaseList);
     setCurrentPhaseIndex(0);
 
-    const progressInterval = setInterval(() => {
-      setScanProgress(prev => {
-        const increment = (Math.random() * 8 + 3) * speedMultiplier;
-        const newProgress = Math.min(prev + increment, 98);
-        const phaseIndex = Math.min(Math.floor((newProgress / 100) * phaseList.length), phaseList.length - 1);
-        setCurrentPhaseIndex(phaseIndex);
-        return newProgress;
-      });
-    }, 150);
+    setScanProgress(0);
+    setCurrentPhaseIndex(0);
 
     try {
       let res;
@@ -2640,25 +2414,17 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         if (cancelRef.current) throw new Error('SCAN_CANCELLED');
         finalResults = [{ type: finalType, input: resInputToUse, ...res }];
         
-        if (finalType === 'email' && checkBreaches) {
-          const breaches = await checkBreaches(finalInput);
-          if (breaches) {
-            finalResults.push({ type: 'breach', input: finalInput, found: breaches });
-          }
-        }
         hasThreat = finalResults.some((r: any) => r.verdict === 'Suspicious' || r.verdict === 'Malicious' || (r.leakages && r.leakages.length > 0) || (r.type === 'breach' && r.found?.length > 0));
       }
       
       setScanProgress(100);
-      setCurrentPhaseIndex(100);
-      clearInterval(progressInterval);
+      setCurrentPhaseIndex(Math.max(0, phaseList.length - 1));
       
       // small delay to show 100% just in case
       setTimeout(() => {
         setDraftResult({ finalResults, hasThreat });
       }, 300);
     } catch (e: any) {
-      clearInterval(progressInterval);
       if (e.message === 'SCAN_CANCELLED') {
         console.log('Scan cancelled by user.');
         setResult(null);
@@ -3012,12 +2778,12 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
                   <Search size={18} className="text-[#00E5FF]" />
                 </motion.div>
                 {scanType === 'url' ? 'Scanning URL & Verifying Reputation' : 
-                 scanType === 'antivirus' ? 'Performing Deep System Antivirus Scan' :
+                 scanType === 'antivirus' ? 'Device-wide scanning is not available in a browser' :
                  scanType === 'file' ? 'Analyzing File Hash & Structure' : 
                  scanType === 'phishing' ? 'Evaluating Phishing Threat' : 
                  scanType === 'sms' ? 'Detecting Smishing Patterns' :
                  'Generating Identity Credibility Checks'}
-                <span className="text-[#00E5FF] ml-2 text-xl">{Math.round(scanProgress)}%</span>
+                <span className="text-[#00E5FF] ml-2 text-xl">Waiting for provider response…</span>
               </h3>
             </div>
           </div>
@@ -3026,7 +2792,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
             <motion.div
               className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-primary via-[#00E5FF] to-[#34D399] shadow-[0_0_15px_rgba(0,229,255,0.6)]"
               initial={{ width: "0%" }}
-              animate={{ width: `${scanProgress}%` }}
+              animate={{ width: "35%" }}
               transition={{ ease: "easeInOut", duration: 0.2 }}
             />
           </div>
@@ -3174,7 +2940,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
                       "px-3 py-1 rounded-full text-sm font-bold text-white",
                       resItem.riskScore < 30 ? "bg-success" : resItem.riskScore < 70 ? "bg-[#F59E0B]" : "bg-danger"
                     )}>
-                      {resItem.riskScore}/100
+                      {typeof resItem.riskScore === 'number' ? `${resItem.riskScore}/100` : 'Not scored'}
                     </div>
                   </div>
                 )}
@@ -3963,7 +3729,7 @@ function AIAssistant({ askAI, logActivity, profile, setActiveScreen, alerts, act
         {currentDomain === 'darkweb' && (
            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap gap-2 mt-1">
              <button onClick={() => setActiveScreen('darkweb')} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
-               <Ghost size={12} className="text-danger" /> Scan Dark Web
+               <Ghost size={12} className="text-danger" /> Search Public Sources
              </button>
              <button onClick={() => handleSend("What should I do first if my password is part of a data breach?")} className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5">
                <AlertCircle size={12} className="text-accent" /> Breach Response Plan
@@ -4046,7 +3812,7 @@ function PhishingTrainingModule({ onClose, logActivity, isEmbedded = false }: { 
       type: "email",
       sender: "Alerts@CyberAmour",
       subject: "Action Required: Exposed Credentials Found",
-      content: "You receive a legitimate alert from your Dark Web Monitoring service that a password you use frequently was found in a database breach.\n\nWhat is the most appropriate first step to secure your accounts?",
+      content: "You receive a legitimate alert from your Public Breach Intelligenceing service that a password you use frequently was found in a database breach.\n\nWhat is the most appropriate first step to secure your accounts?",
       options: [
         "Ignore it since it's just one password.",
         "Change the password immediately on the breached site and any other sites where you reused it.",
@@ -4454,7 +4220,7 @@ function UserGuide({ setActiveScreen }: any) {
     },
     {
       title: "Global Identity Search",
-      desc: "Perform comprehensive deep-dives into human personas. Discover footprints left across public platforms, dark web mentions, and linked digital identities.",
+      desc: "Conduct authorized public-source cybersecurity research, review verifiable digital-exposure signals, and retain source references. No private-database access or unsupported personal profiling.",
       features: [
         "Navigate to 'Cyber Forensics' and scroll to 'Global Identity Search'.",
         "The system scans common platforms, checks forum registrations, and analyzes linked personas.",
@@ -4567,7 +4333,7 @@ function Alerts({ alerts, profile, setActiveScreen }: any) {
       return { screen: 'scan', label: 'Open Cyber Forensics', icon: <Search size={14} className="mr-1.5" /> };
     }
     if (content.includes("dark web") || content.includes("breach") || content.includes("leak")) {
-      return { screen: 'darkweb', label: 'Open Dark Web Monitor', icon: <Ghost size={14} className="mr-1.5" /> };
+      return { screen: 'darkweb', label: 'Open Public Breach Intelligence', icon: <Ghost size={14} className="mr-1.5" /> };
     }
     if (content.includes("scan") || content.includes("phishing") || content.includes("url") || content.includes("forensics")) {
       return { screen: 'scan', label: 'Open Cyber Forensics', icon: <Search size={14} className="mr-1.5" /> };
@@ -4986,11 +4752,12 @@ function SettingsScreen({ profile, logout, updateUserPreferences, changePassword
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs p-3 bg-bg/50 rounded-xl border border-border">
                       <div>
-                        <div className="font-bold">Chrome on Windows</div>
-                        <div className="text-[10px] text-text-dim">192.168.1.45 • Active Now</div>
+                        <div className="font-bold">Current browser session</div>
+                        <div className="text-[10px] text-text-dim break-all">{typeof navigator !== 'undefined' ? navigator.userAgent : 'Browser details unavailable'} · local session only</div>
                       </div>
                       <span className="text-success font-bold">Current</span>
                     </div>
+                    <p className="text-[10px] text-text-dim">Public IP and other signed-in devices are not shown here unless collected by a trusted backend session registry. A local browser page cannot reliably discover your LAN topology.</p>
                   </div>
                 </div>
               </div>
@@ -5257,31 +5024,8 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
   const [isMonitoringFin, setIsMonitoringFin] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Real-time packet volume data
-  const [packetVolumeData, setPacketVolumeData] = useState<any[]>(
-    Array.from({ length: 20 }, (_, i) => ({
-      time: i,
-      incoming: Math.floor(Math.random() * 100) + 20,
-      outgoing: Math.floor(Math.random() * 80) + 10,
-    }))
-  );
-
-  useEffect(() => {
-    const volumeInterval = setInterval(() => {
-      setPacketVolumeData(prevData => {
-        const newData = [...prevData.slice(1)];
-        const lastTime = newData[newData.length - 1].time;
-        newData.push({
-          time: lastTime + 1,
-          incoming: Math.floor(Math.random() * 100) + 20,
-          outgoing: Math.floor(Math.random() * 80) + 10,
-        });
-        return newData;
-      });
-    }, 2000);
-
-    return () => clearInterval(volumeInterval);
-  }, []);
+  // Live traffic data requires an installed sensor/agent; never synthesize packet counts.
+  const packetVolumeData: any[] = [];
 
   const handleNetworkScan = async () => {
     import('./utils/sounds').then(s => s.playScanSound());
@@ -5295,7 +5039,8 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
       } else {
         import('./utils/sounds').then(s => s.playSuccessSound());
       }
-    } catch {
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Live network capture is not configured. No packet data was collected.');
       import('./utils/sounds').then(s => s.playErrorSound());
     }
     setIsScanningNetwork(false);
@@ -5314,9 +5059,8 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
         import('./utils/sounds').then(s => s.playSuccessSound());
       }
     } catch (e: any) {
-      if (e.message === 'LIMIT_REACHED') {
-        setErrorMsg("You've used your 5 free virus scans. Upgrade to a subscription-based membership to access premium features.");
-      }
+      if (e.message === 'LIMIT_REACHED') setErrorMsg("You've used your included device scans.");
+      else setErrorMsg(e?.message || 'A real endpoint scanner is not configured. No device scan was performed.');
       import('./utils/sounds').then(s => s.playErrorSound());
     }
     setIsScanningDevice(false);
@@ -5324,8 +5068,11 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
 
   const handleFinMonitor = async () => {
     setIsMonitoringFin(true);
-    const result = await monitorTransactions();
-    setTransactions(result);
+    try {
+      const result = await monitorTransactions();
+      setTransactions(Array.isArray(result) ? result : result?.transactions || []);
+      if (result?.message) setErrorMsg(result.message);
+    } catch (e: any) { setErrorMsg(e?.message || 'No financial data connector is configured.'); }
     setIsMonitoringFin(false);
   };
 
@@ -5369,13 +5116,13 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
     >
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Network & Device Shield</h2>
-          <p className="text-sm text-text-dim mt-1">Real-time packet filtering and malware protection.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Network & Device Diagnostics</h2>
+          <p className="text-sm text-text-dim mt-1">Browser-based diagnostics. Live packet capture and endpoint protection require a separately installed, trusted sensor or agent.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="status-badge bg-success/20 text-success border-success/30">
-            <ShieldCheck size={14} className="mr-1" />
-            Active Protection
+          <div className="status-badge bg-amber-500/10 text-amber-200 border-amber-500/30">
+            <ShieldAlert size={14} className="mr-1" />
+            Sensor not connected
           </div>
         </div>
       </div>
@@ -5385,9 +5132,9 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
         <div className="glass-card p-6 space-y-6 lg:col-span-2">
           <div className="flex items-center gap-3">
              <Activity className="text-[#3B82F6]" size={24} />
-             <h3 className="text-xl font-bold">Real-time Packet Volume</h3>
+             <h3 className="text-xl font-bold">Live Packet Volume</h3>
           </div>
-          <p className="text-sm text-text-dim">Tracking live incoming versus outgoing network packets over time.</p>
+          <p className="text-sm text-text-dim">No live packet data is available in this browser session. Connect a network sensor before using packet-volume charts.</p>
           <div className="w-full h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={packetVolumeData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -5436,7 +5183,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 <Network className="text-primary" size={24} />
                 <h3 className="text-xl font-bold">Packet Filter & CyberAmour Analysis</h3>
               </div>
-              <p className="text-xs text-text-dim mt-1">Deep packet inspection and simulated CyberAmour log ingestion.</p>
+              <p className="text-xs text-text-dim mt-1">Live packet inspection requires a separately deployed network sensor. This browser session does not capture packets.</p>
             </div>
             <button 
               onClick={handleNetworkScan}
@@ -5499,7 +5246,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                          "break-all text-white/90",
                          p.status !== 'Safe' && "text-danger/90 font-bold"
                       )}>
-                         src_ip="{p.source}" dest_ip="{p.dest}" protocol="{p.protocol}" bytes_in={p.size} action="{p.status === 'Safe' ? 'allowed' : 'blocked'}" {p.status !== 'Safe' ? `risk_factor="high" signature="Potential ${p.status} Traffic"` : 'risk_factor="low"'} src_port={Math.floor(Math.random() * 65000)} dest_port={p.protocol === 'HTTPS' ? 443 : 80}
+                         src_ip="{p.source}" dest_ip="{p.dest}" protocol="{p.protocol}" bytes_in={p.size} action="{p.status === 'Safe' ? 'allowed' : 'blocked'}" {p.status !== 'Safe' ? `risk_factor="high" signature="Potential ${p.status} Traffic"` : 'risk_factor="low"'} src_port={0} dest_port={p.protocol === 'HTTPS' ? 443 : 80}
                       </div>
                     </div>
                   ))}
@@ -5531,7 +5278,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                     </div>
                     <p className="text-[10px] text-text-dim">
                       {a.status === 'SessionHijack' 
-                        ? `AI Auto-Blocked a session hijacking attempt from ${a.source}. Unauthorized token extraction prevented.`
+                        ? `A session-hijacking indicator was reported for ${a.source}. No traffic was blocked by this browser-only app.`
                         : `Detected ${a.protocol} anomaly from ${a.source} targeting your local gateway. Potential ${a.status === 'Malicious' ? 'Botnet' : 'Reconnaissance'} activity.`
                       }
                     </p>
@@ -5814,7 +5561,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 <div className="space-y-2">
                    <h4 className="text-xs font-bold uppercase tracking-widest text-[#F59E0B] flex items-center gap-2">
                       <Search size={14} />
-                      Packet Headers (Simulated)
+                      Packet Header Preview (No live capture)
                    </h4>
                    <div className="bg-black p-4 rounded-xl border border-border/50 font-mono text-xs text-[#a0a0a0] max-h-48 overflow-y-auto whitespace-pre-wrap">
                      {selectedPacket.headers || JSON.stringify({
@@ -5837,9 +5584,9 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                    <div className="bg-black p-4 rounded-xl border border-border/50 font-mono text-xs text-[#a0a0a0] max-h-64 overflow-y-auto whitespace-pre-wrap">
                       {selectedPacket?.payload || Array.from({ length: 8 }).map((_, i) => {
                         const offset = (i * 16).toString(16).padStart(4, '0');
-                        const hex = Array.from({ length: 16 }).map(() => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(' ');
+                        const hex = 'No live packet payload available';
                         const ascii = Array.from({ length: 16 }).map(() => {
-                           const c = Math.floor(Math.random() * 95) + 32;
+                           const c = 0;
                            return c > 32 && c < 127 ? String.fromCharCode(c) : '.';
                         }).join('');
                         return `${offset}  ${hex.substring(0, 23)}  ${hex.substring(24)}  |${ascii}|`;
@@ -5868,7 +5615,6 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
 function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen, askAI }: any) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [scanTimeLeft, setScanTimeLeft] = useState(0);
   const [currentPhases, setCurrentPhases] = useState<string[]>([]);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [scanResult, setScanResult] = useState<any>(null);
@@ -5880,25 +5626,18 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
     import('./utils/sounds').then(s => s.playScanSound());
     setIsScanning(true);
     setScanProgress(0);
-    setScanTimeLeft(8);
 
-    const timeInterval = setInterval(() => setScanTimeLeft(prev => Math.max(0, prev - 1)), 1000);
-    const phases = ["Initializing scan...", "Connecting to Tor nodes...", "Searching underground forums...", "Analyzing ransomware leak sites...", "Compiling threat summary..."];
+    const phases = ["Submitting authorized account identifier...", "Searching indexed public breach notifications...", "Verifying source references...", "Preparing evidence-based summary..."];
     setCurrentPhases(phases);
     setCurrentPhaseIndex(0);
 
-    const progressInterval = setInterval(() => setScanProgress(prev => {
-        const increment = Math.random() * 20 + 5;
-        const newProgress = Math.min(95, prev + increment);
-        const phaseIndex = Math.min(Math.floor((newProgress / 100) * phases.length), phases.length - 1);
-        setCurrentPhaseIndex(phaseIndex);
-        return newProgress;
-    }), 250);
+    setScanProgress(0);
+    setCurrentPhaseIndex(0);
 
     try {
       const result = await scanDarkWeb();
       setScanProgress(100);
-      setCurrentPhaseIndex(100);
+      setCurrentPhaseIndex(Math.max(0, phases.length - 1));
       setScanResult(result);
       if (result && result.findings && result.findings.length > 0) {
         import('./utils/sounds').then(s => s.playErrorSound());
@@ -5909,16 +5648,14 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
       console.error(error);
       import('./utils/sounds').then(s => s.playErrorSound());
     } finally {
-      clearInterval(timeInterval);
-      clearInterval(progressInterval);
       setTimeout(() => setIsScanning(false), 500);
     }
   };
 
-  const darkWebBreaches = breaches.filter((b: any) => b.isDarkWeb);
-  const darkWebScans = scans.filter((s: any) => s.type === 'darkweb').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const darkWebBreaches = breaches.filter((b: any) => b.isDarkWeb || Boolean(b.sourceUrl));
+  const darkWebScans = scans.filter((s: any) => s.type === 'darkweb' || s.type === 'public-breach-intelligence').sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const isForensicsUnlocked = profile?.hasForensicsReport === true;
+  const isForensicsUnlocked = profile?.hasForensicsReport === true || profile?.isPremium === true || profile?.isOwner === true;
 
   return (
     <motion.div 
@@ -5928,7 +5665,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dark Web Monitor</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Public Breach Intelligence</h2>
           <p className="text-sm text-text-dim mt-1">AI-powered identity exposure detection.</p>
         </div>
       </div>
@@ -5939,14 +5676,14 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
             <Zap className="text-[#8B5CF6]" size={24} />
           </div>
           <div>
-            <h3 className="font-bold text-lg text-white">Deep Dark Web Forensics Report</h3>
-            <p className="text-sm text-text-dim">A comprehensive, one-time deep scan and PDF report compiling 10 years of historical dark web data on your identity.</p>
+            <h3 className="font-bold text-lg text-white">Public Breach Intelligence Report</h3>
+            <p className="text-sm text-text-dim">A search-grounded review of indexed public breach notices and cybersecurity reporting. Results are not exhaustive and do not establish that an account is safe.</p>
           </div>
         </div>
         <div>
           {isForensicsUnlocked ? (
-            <button onClick={() => alert('Downloading deep-forensics-report.pdf...')} className="px-6 py-3 bg-[#8B5CF6] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B5CF6]/80 transition-colors whitespace-nowrap">
-              <CheckCircle2 size={18} /> Download PDF
+            <button onClick={() => { const report = { product: 'CyberAmour Public Breach Intelligence', generatedAt: new Date().toISOString(), summary: scanResult?.summary || 'No scan summary available.', findings: darkWebBreaches.map((b: any) => ({ source: b.source, sourceUrl: b.sourceUrl || null, date: b.breachDate || null, riskLevel: b.riskLevel || 'Unverified', details: b.details || '', actionableSteps: b.actionableSteps || [] })), limitations: ['Public-source search is not exhaustive and does not access private dark-web forums.', 'Verify each source before taking action.'] }; const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'cyberamour-public-breach-intelligence-report.json'; link.click(); URL.revokeObjectURL(url); }} className="px-6 py-3 bg-[#8B5CF6] text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B5CF6]/80 transition-colors whitespace-nowrap">
+              <CheckCircle2 size={18} /> Export Report
             </button>
           ) : (
             <button onClick={() => setActiveScreen('pricing')} className="px-6 py-3 border border-[#8B5CF6] text-[#8B5CF6] font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B5CF6]/10 transition-colors whitespace-nowrap">
@@ -5972,7 +5709,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
             className="flex items-center justify-center gap-2 px-6 py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-50"
           >
             {isScanning ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
-            {isScanning ? "Scanning Deep Web..." : "Scan Dark Web Now"}
+            {isScanning ? "Searching public sources..." : "Search Public Sources"}
           </button>
         </div>
       </div>
@@ -5985,11 +5722,11 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
                        <Search size={14} className="text-primary" />
                      </motion.div>
-                     Scanning Deep Web...
+                     Searching indexed public sources...
                    </h3>
                  </div>
                  <div className="text-right">
-                   <span className="text-[10px] uppercase font-bold text-text-dim block mb-1">~{scanTimeLeft}s remaining</span>
+                   <span className="text-[10px] uppercase font-bold text-text-dim block mb-1">Waiting for live search response</span>
                  </div>
                </div>
                
@@ -6052,7 +5789,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
         <div className="glass-card p-6 space-y-2">
           <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Exposures Found</div>
           <div className="text-4xl font-black text-danger">{darkWebBreaches.length}</div>
-          <p className="text-[10px] text-text-dim">Across simulated underground databases</p>
+          <p className="text-[10px] text-text-dim">Across configured public sources</p>
         </div>
         <div className="glass-card p-6 space-y-2">
           <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Monitored Email</div>
@@ -6079,7 +5816,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
                 <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle2 size={32} className="text-success" />
                 </div>
-                <p className="text-text-dim italic text-sm">No identity exposures found on the dark web.</p>
+                <p className="text-text-dim italic text-sm">No source-backed exposure findings were returned. This does not prove that the account has never been exposed.</p>
               </div>
             ) : (
               darkWebBreaches.map((b: any, idx: number) => (
@@ -6494,7 +6231,7 @@ function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }
         'Security Score (Ad-supported)',
         'Limited Alerts (Last 3)',
         'Community Support',
-        '3 Dark Web Scans / Month'
+        '3 Public Breach Intelligence Checks / Month'
       ],
       button: 'Current Plan',
       productId: null
@@ -6508,7 +6245,7 @@ function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }
       features: [
         'No Advertisements (AdMob Disabled)',
         'Unlimited Cyber Forensics Scans',
-        'Automated Dark Web Monitoring',
+        'Automated Public Breach Intelligenceing',
         'Background Threat Network Checks',
         'Dedicated AI Advisor',
       ],
@@ -6612,9 +6349,9 @@ function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 w-full">
             <div className="space-y-2 flex-1">
               <h4 className="text-lg font-bold flex items-center gap-2">
-                <Zap className="text-[#8B5CF6]" /> Deep Dark Web Forensics Report
+                <Zap className="text-[#8B5CF6]" /> Public Breach Intelligence Report
               </h4>
-              <p className="text-sm text-text-dim">A comprehensive, one-time deep scan and PDF report compiling 10 years of historical dark web data on your identity.</p>
+              <p className="text-sm text-text-dim">A search-grounded review of indexed public breach notices and cybersecurity reporting. Results are not exhaustive and do not establish that an account is safe.</p>
             </div>
             {profile?.hasForensicsReport ? (
               <div className="px-6 py-3 bg-[#10B981]/20 text-[#10B981] font-bold rounded-xl flex items-center gap-2">

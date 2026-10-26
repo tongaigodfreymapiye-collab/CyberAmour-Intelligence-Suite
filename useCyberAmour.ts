@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth, db, functions, httpsCallable, onAuthStateChanged, doc, getDoc, setDoc, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, Timestamp, User, signInWithPopup, googleProvider, signOut, writeBatch, getDocs, updatePassword, updateProfile, orderBy, limit, runTransaction } from '../firebase';
-import { GoogleGenAI, Type } from '@google/genai';
+const Type = { OBJECT: 'OBJECT', STRING: 'STRING', INTEGER: 'INTEGER', NUMBER: 'NUMBER', ARRAY: 'ARRAY', BOOLEAN: 'BOOLEAN' } as const;
 import { BillingService } from '../utils/billing';
 
 import * as otplib from 'otplib';
@@ -12,7 +12,7 @@ const authenticator = (otplib as any).authenticator;
 // Password-provider users are separately stopped at the verification screen in App.tsx.
 const OWNER_EMAIL = 'tongaigodfreymapiye@gmail.com';
 const isPermanentOwner = (account: User | null | undefined) =>
-  account?.emailVerified === true && account.email?.trim().toLowerCase() === OWNER_EMAIL;
+  account?.email?.trim().toLowerCase() === OWNER_EMAIL;
 
 const OWNER_DEVICE_LIMIT = 5;
 const OWNER_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -83,7 +83,12 @@ async function enforceOwnerDeviceLimit(account: User) {
   }
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// AI calls are proxied through authenticated Cloud Functions; no Gemini key is shipped to browsers.
+const ai = { models: { generateContent: async (options: any) => {
+  const generate = httpsCallable(functions, 'cyberAmourGenerateContent', { timeout: 65000 });
+  const response: any = await generate({ options });
+  return { text: response.data?.text || '', groundingSources: Array.isArray(response.data?.groundingSources) ? response.data.groundingSources : [], generatedAt: response.data?.generatedAt, grounded: Boolean(response.data?.grounded) };
+} } };
 
 let cachedThreatIntel: string | null = null;
 let isThreatIntelFetching: Promise<string> | null = null;
@@ -190,7 +195,6 @@ export function useCyberAmour() {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
-          securityScore: 85,
           isPremium: false,
           isBusiness: false,
           isAutoMonitoringEnabled: true,
@@ -279,7 +283,7 @@ export function useCyberAmour() {
       if (!email) return;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
+        model: "gemini-2.5-flash",
         contents: `Perform comprehensive forensic screening on the newly registered user.
         Email: ${email}
         Name: ${name || 'None'}
@@ -328,7 +332,7 @@ export function useCyberAmour() {
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `You are CyberAmour AI Advisor. 
         Analyze the following user security data and provide ONE concise, proactive security tip or suggestion.
         Security Score: ${profile?.securityScore || 0}
@@ -341,7 +345,7 @@ export function useCyberAmour() {
         - targetScreen: The screen ID to navigate to. Options: 'dashboard', 'scan', 'ai', 'vault', 'settings', 'network', 'pricing', 'academy'.
         
         If the score is below 70, be more urgent.
-        If there are recent breaches, suggest checking the 'scan' (Dark Web Monitor).
+        If there are recent breaches, suggest checking the Public Breach Intelligence workspace.
         If activity shows many logins, suggest checking the 'vault' or 'settings' (2FA).
         If network anomalies are present, suggest 'network'.`,
         config: {
@@ -479,17 +483,20 @@ export function useCyberAmour() {
       }
     };
 
+    if (!navigator.geolocation) { setWeather(null); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-      () => fetchWeather(51.5074, -0.1278) // Default to London if denied
+      () => setWeather(null),
+      { timeout: 8000, maximumAge: 15 * 60 * 1000 }
     );
 
     const interval = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => fetchWeather(51.5074, -0.1278)
+        () => setWeather(null),
+        { timeout: 8000, maximumAge: 15 * 60 * 1000 }
       );
-    }, 1000 * 60 * 30); // Every 30 mins
+    }, 1000 * 60 * 30); // Every 30 mins when location permission is available
 
     return () => clearInterval(interval);
   }, [user]);
@@ -501,7 +508,7 @@ export function useCyberAmour() {
         action,
         metadata,
         createdAt: new Date().toISOString(),
-        ip: '192.168.1.' + Math.floor(Math.random() * 255), // Simulated IP
+        ip: null, // Browser-side logging does not know the public client IP; collect it server-side if required.
         device: navigator.userAgent
       });
     } catch (e) {
@@ -514,7 +521,7 @@ export function useCyberAmour() {
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `Analyze the following user activity logs for security anomalies, unusual patterns, or potential account compromise. Return a JSON object.
         Logs: ${JSON.stringify(activityLogs.slice(-10))}`,
         config: {
@@ -545,8 +552,6 @@ export function useCyberAmour() {
           type: 'anomaly'
         });
         
-        const newScore = Math.max(0, (profile?.securityScore || 85) - 15);
-        await updateDoc(doc(db, 'users', user.uid), { securityScore: newScore });
       }
 
       return result;
@@ -648,9 +653,11 @@ export function useCyberAmour() {
 
   const performPhishingScan = async (type: 'phishing' | 'email' | 'sms' | 'phone' | 'name' | 'company' | 'username' | 'domain' | 'url' | 'file' | 'antivirus', content: string, fileData?: { mimeType: string, data: string, name: string }) => {
     if (!user) return;
+    if (type === 'antivirus') throw new Error('Device-wide antivirus scanning is not available from a browser. Use the Antivirus & File Reputation page for a real hash reputation lookup, or deploy a signed endpoint agent. No device scan was performed.');
+    const ownerAccount = isPermanentOwner(user);
     
-    // Check Limits
-    if (profile && !profile.isPremium) {
+    // Owner lifetime access bypasses customer scan allowances; backend still requires auth.
+    if (!ownerAccount && profile && !profile.isPremium) {
       if (type === 'phone') {
         if (profile.phoneScansLeft <= 0) throw new Error('LIMIT_REACHED');
       } else {
@@ -659,10 +666,36 @@ export function useCyberAmour() {
     }
 
     try {
+      // Real live OSINT/reputation workflow: provider credentials stay in Cloud Functions.
+      const liveKinds: Record<string, string> = { email: 'email', phone: 'phone', name: 'name', company: 'company', username: 'username', domain: 'domain', url: 'url' };
+      if (liveKinds[type]) {
+        const liveLookup = httpsCallable(functions, 'analyzeCyberIntel', { timeout: 65000 });
+        const liveResponse: any = await liveLookup({ kind: liveKinds[type], target: content });
+        const live = liveResponse.data || {};
+        const normalized = {
+          ...live,
+          target: live.target || content,
+          type,
+          riskScore: typeof live.riskScore === 'number' ? live.riskScore : null,
+          verdict: live.verdict || 'Insufficient evidence',
+          analysis: live.analysis || 'Live analysis returned no narrative. Review the source evidence and provider status.',
+          redFlags: Array.isArray(live.findings) ? live.findings.map((finding: string) => ({ indicator: finding, advice: 'Verify this finding against the linked source before taking action.' })) : [],
+          sources: Array.isArray(live.sources) ? live.sources : [],
+          collectedAt: live.collectedAt || new Date().toISOString(),
+          reason: Array.isArray(live.limitations) && live.limitations.length ? live.limitations.join(' · ') : undefined
+        };
+        await addDoc(collection(db, 'users', user.uid, 'scans'), { uid: user.uid, type, content, ...normalized, createdAt: new Date().toISOString() });
+        const hasPositiveEvidence = (Array.isArray(live.evidence) && live.evidence.some((e: any) => Number(e.malicious || 0) + Number(e.suspicious || 0) > 0 || Number(e.abuseConfidenceScore || 0) >= 50)) || /malicious|suspicious/i.test(String(normalized.verdict));
+        if (hasPositiveEvidence) {
+          await addDoc(collection(db, 'users', user.uid, 'alerts'), { uid: user.uid, title: 'Threat Intelligence Finding', message: `Live threat-intelligence review of ${type} target found indicators requiring analyst verification. Review provider evidence and source links.`, severity: /malicious/i.test(String(normalized.verdict)) ? 'high' : 'medium', isRead: false, createdAt: new Date().toISOString(), type: 'threat-intel' });
+        }
+        return normalized;
+      }
+
       let prompt = ``;
       let responseSchema: any;
       let modelOptions: any = {
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
       };
 
       const isOsint = ['email', 'phone', 'name', 'company', 'username', 'domain'].includes(type);
@@ -865,11 +898,8 @@ Return only JSON matching the supplied response schema. Do not include unsupport
         }
       }
 
-      // Update security score based on scan results (simplified logic)
+      // A scan finding is not enough to recompute an overall security score.
       if (result.verdict !== 'Safe') {
-        const newScore = Math.max(0, (profile?.securityScore || 85) - 5);
-        await updateDoc(doc(db, 'users', user.uid), { securityScore: newScore });
-        
         await addDoc(collection(db, 'users', user.uid, 'alerts'), {
           uid: user.uid,
           title: result.verdict === 'Malicious' ? "Urgent Threat Detected" : "Suspicious Information Found",
@@ -899,88 +929,20 @@ Return only JSON matching the supplied response schema. Do not include unsupport
     }
   };
 
-  const checkBreaches = async (email: string) => {
-    if (!user) return;
-    
-    // Simulate API call to Have I Been Pwned
-    const mockBreaches = [
-      { source: 'Adobe', date: '2013-10-04', risk: 'High' },
-      { source: 'LinkedIn', date: '2016-05-17', risk: 'Medium' },
-      { source: 'Canva', date: '2019-05-24', risk: 'Low' }
-    ];
-
-    const found = mockBreaches.filter(() => Math.random() > 0.5);
-    
-    for (const b of found) {
-      await addDoc(collection(db, 'users', user.uid, 'breaches'), {
-        uid: user.uid,
-        email,
-        source: b.source,
-        breachDate: b.date,
-        riskLevel: b.risk,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    if (found.length > 0) {
-      const newScore = Math.max(0, (profile?.securityScore || 85) - (found.length * 10));
-      await updateDoc(doc(db, 'users', user.uid), { securityScore: newScore });
-      
-      const shouldNotifyBreaches = profile?.notificationPrefs?.breaches !== false;
-      if (shouldNotifyBreaches) {
-        if (profile?.notificationPrefs?.alerts !== false) {
-          import('../utils/sounds').then(s => s.playAlertSound());
-        }
-        await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-          uid: user.uid,
-          title: "Password Exposure Detected",
-          message: `Your email ${email} was found in ${found.length} breaches. Change your passwords immediately.`,
-          severity: "critical",
-          isRead: false,
-          createdAt: new Date().toISOString()
-        });
-      }
-    }
-
-    return found;
-  };
-
-  const createAlert = async (title: string, message: string, severity: 'critical' | 'high' | 'medium' | 'low' | string = 'low') => {
-    if (!user) return;
-    try {
-      const shouldNotifyAlerts = profile?.notificationPrefs?.alerts !== false;
-      if (!shouldNotifyAlerts) return;
-      
-      const parsedSeverity = (severity || 'low').toLowerCase();
-
-      import('../utils/sounds').then(s => s.playAlertSound());
-      await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-        uid: user.uid,
-        title,
-        message: message || '',
-        severity: parsedSeverity,
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error("Failed to create alert", error);
-    }
+  const checkBreaches = async (_email: string) => {
+    if (!user) throw new Error('Sign in to check breach exposure.');
+    throw new Error('A dedicated breach-notification provider is not configured. No breach database was queried and no breach records were created. Configure a licensed breach API before enabling this feature.');
   };
 
   const askAI = async (message: string) => {
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: message,
-        config: {
-          systemInstruction: "You are CyberAmour, an intelligent cybersecurity assistant. Provide expert advice on securing digital lives, identifying threats, and optimizing device security. Be professional, reassuring, and clear. Avoid overly technical jargon. Developer Credit: Engineer Tongai Godfrey Mapiye (MSc Degree in Cybersecurity, Open Institute of Technology, Malta) © 2026"
-        }
-      });
-      return response.text;
+      if (!user) return 'Please sign in to use the CyberAmour AI assistant.';
+      const assistant = httpsCallable(functions, 'cyberAmourAssistant', { timeout: 45000 });
+      const response: any = await assistant({ message });
+      return response.data?.answer || 'The AI service returned no answer. Please try again.';
     } catch (error: any) {
-      const isQuotaError = error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED' || error?.status === 429 || String(error).includes('429') || String(error).includes('RESOURCE_EXHAUSTED');
-      if (!isQuotaError) console.error("AI Assistant failed", error);
-      return "I'm currently receiving too many requests. Please try asking again in a few minutes.";
+      console.error('CyberAmour server-side AI assistant failed', error);
+      return error?.message || 'The AI service is unavailable or not configured. No simulated answer was generated.';
     }
   };
 
@@ -1067,11 +1029,11 @@ Return only JSON matching the supplied response schema. Do not include unsupport
   };
 
   const autoRectify = async () => {
-    if (!user || !profile?.isPremium) return;
+    if (!user || (!isPermanentOwner(user) && !profile?.isPremium && !profile?.isOwner)) return;
     
     logActivity('auto_rectify_started');
     
-    // Simulate AI scanning and fixing
+    // This workflow reviews alerts only. It does not repair endpoint files or operating-system settings.
     // 1. Clear old logs if retention is set
     await clearOldLogs();
     
@@ -1118,27 +1080,12 @@ Return only JSON matching the supplied response schema. Do not include unsupport
   };
 
   const generateActivationCode = async (tier: 'premium' | 'business' | 'forensics', linkedEmail?: string) => {
-    if (!user || (user.email !== 'tgmapiye@gmail.com' && user.email !== 'tongaigodfreymapiye@gmail.com')) {
-      throw new Error('Not authorized');
-    }
-    
-    const segment = () => Math.random().toString(36).substring(2, 6).toUpperCase();
-    const code = tier === 'forensics' 
-      ? `${segment()}-${segment()}-${segment()}`
-      : `${segment()}-${segment()}-${segment()}-${segment()}`;
-
-    await addDoc(collection(db, 'activationCodes'), {
-      code,
-      tier,
-      createdBy: user.uid,
-      linkedEmail: linkedEmail ? linkedEmail.trim().toLowerCase() : null,
-      createdAt: new Date().toISOString(),
-      used: false,
-      usedBy: null,
-      usedAt: null
-    });
-    
-    logActivity('admin_generated_activation_code', { code });
+    if (!user || user.email?.trim().toLowerCase() !== OWNER_EMAIL) throw new Error('Not authorized');
+    const generate = httpsCallable(functions, 'generateActivationCode');
+    const result: any = await generate({ tier, linkedEmail: linkedEmail ? linkedEmail.trim().toLowerCase() : '' });
+    const code = result.data?.code;
+    if (typeof code !== 'string' || !code) throw new Error('Activation code generation failed.');
+    logActivity('admin_generated_activation_code', { tier, linkedEmail: linkedEmail || null });
     return code;
   };
 
@@ -1159,36 +1106,12 @@ Return only JSON matching the supplied response schema. Do not include unsupport
   const scanDarkWeb = async () => {
     if (!user || !profile?.isPremium) return;
 
-    logActivity('dark_web_scan_started');
+    logActivity('public_breach_intelligence_started');
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Perform a comprehensive search intelligence gathering protocol across indexed repositories for the email address: ${user.email} or anything related. 
-        Identify potential data breaches, leaked credentials, known scam database entries, and personal information leaks (e.g., social security numbers, financial info, medical records) using your Google Search tool.
-        Return a JSON object with a list of findings. Each finding should have: 
-        - source: where the leak was found
-        - date: when it was leaked
-        - riskLevel: Low, Medium, High, Critical
-        - details: description of the breach
-        - dataTypesExposed: an array of strings like "Passwords", "Financial Info", "SSN", "Emails", "Phone Numbers", etc.
-        - actionableSteps: an array of strings outlining exact steps the user should take to mitigate this specific risk (e.g., "Change password immediately on X", "Contact bank", "Freeze credit").
-        Be highly analytical.
-        
-        CRITICAL INSTRUCTION: You MUST return ONLY a raw JSON string matching exactly this schema:
-        {
-          "findings": [
-            {
-              "source": "string",
-              "date": "string",
-              "riskLevel": "string",
-              "details": "string",
-              "dataTypesExposed": ["string"],
-              "actionableSteps": ["string"]
-            }
-          ],
-          "summary": "string"
-        }`,
+        model: "gemini-2.5-flash",
+        contents: `Perform a cautious search-grounded review of publicly indexed breach notifications and reputable cybersecurity reporting related to the signed-in account email: ${user.email}. Do not claim access to private dark-web forums, stolen credential dumps, or private databases. Do not return passwords, authentication tokens, government identifiers, medical data, or other sensitive exposed values. Do not invent breach records or dates. Use Google Search grounding and return only findings supported by a real source URL. If no reliable evidence is found, return an empty findings array and explain that this is not proof the account has never been exposed. Return JSON with: findings (array of objects with source, sourceUrl, date, riskLevel, details, dataTypesExposed, actionableSteps), summary, limitations. Use only risk-relevant information necessary to advise the account holder.`,
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json"
@@ -1197,40 +1120,41 @@ Return only JSON matching the supplied response schema. Do not include unsupport
 
       const result = safeJsonParse(response.text);
 
-      // Save findings as breaches
-      for (const finding of result.findings) {
+      // Persist only findings with a real source URL returned by the grounded search.
+      const groundedUrls = new Set((Array.isArray(response.groundingSources) ? response.groundingSources : []).map((source: any) => source.url));
+      const verifiedFindings = Array.isArray(result.findings) ? result.findings.filter((item: any) => /^https?:\/\//i.test(String(item.sourceUrl || '')) && groundedUrls.has(item.sourceUrl)) : [];
+      for (const finding of verifiedFindings) {
         await addDoc(collection(db, 'users', user.uid, 'breaches'), {
           uid: user.uid,
           email: user.email,
           source: finding.source,
+          sourceUrl: /^https?:\/\//i.test(String(finding.sourceUrl || '')) ? finding.sourceUrl : null,
           breachDate: finding.date,
           riskLevel: finding.riskLevel,
           details: finding.details,
           dataTypesExposed: finding.dataTypesExposed || [],
           actionableSteps: finding.actionableSteps || [],
-          isDarkWeb: true,
+          isDarkWeb: false,
           createdAt: new Date().toISOString()
         });
       }
 
       // Create an alert if high risk findings
-      const highRisk = result.findings.filter((f: any) => f.riskLevel === 'High' || f.riskLevel === 'Critical');
+      const highRisk = verifiedFindings.filter((f: any) => f.riskLevel === 'High' || f.riskLevel === 'Critical');
       if (highRisk.length > 0) {
         await addDoc(collection(db, 'users', user.uid, 'alerts'), {
           uid: user.uid,
-          title: "Dark Web Exposure Alert",
-          message: `Our scan found ${highRisk.length} critical exposures on the dark web. Review the details in the Dark Web Monitor.`,
+          title: "Public Breach Intelligence Finding",
+          message: `Public-source review returned ${highRisk.length} high-priority item(s) with source references. Verify each item before taking action.`,
           severity: "critical",
           isRead: false,
           createdAt: new Date().toISOString()
         });
         
-        const newScore = Math.max(0, (profile?.securityScore || 85) - (highRisk.length * 15));
-        await updateDoc(doc(db, 'users', user.uid), { securityScore: newScore });
       }
 
       // Save scan history
-      const maxRisk = result.findings.reduce((max: string, f: any) => {
+      const maxRisk = verifiedFindings.reduce((max: string, f: any) => {
         const risks = ['Low', 'Medium', 'High', 'Critical'];
         if (risks.indexOf(f.riskLevel) > risks.indexOf(max)) return f.riskLevel;
         return max;
@@ -1238,16 +1162,16 @@ Return only JSON matching the supplied response schema. Do not include unsupport
 
       await addDoc(collection(db, 'users', user.uid, 'scans'), {
         uid: user.uid,
-        type: 'darkweb',
+        type: 'public-breach-intelligence',
         summary: result.summary,
-        findingsCount: result.findings.length,
-        findings: result.findings,
+        findingsCount: verifiedFindings.length,
+        findings: verifiedFindings,
         maxRisk,
         createdAt: new Date().toISOString()
       });
 
-      logActivity('dark_web_scan_completed', { findingsCount: result.findings.length });
-      return result;
+      logActivity('public_breach_intelligence_completed', { findingsCount: verifiedFindings.length });
+      return { ...result, findings: verifiedFindings };
     } catch (error: any) {
       const isQuotaError = error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED' || error?.status === 429 || String(error).includes('429') || String(error).includes('RESOURCE_EXHAUSTED');
       if (!isQuotaError) {
@@ -1258,184 +1182,27 @@ Return only JSON matching the supplied response schema. Do not include unsupport
   };
 
   const scanNetwork = async () => {
-    if (!user) return;
-    logActivity('network_scan_started');
-    
-    let anomalies = [];
-    let packets = [];
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Act as an advanced network packet analyzer and AI firewall. 
-        Generate 6 sample network packets that a modern firewall would log right now (include protocols like TCP, UDP, HTTPS, ICMP, SYN).
-        Ensure 1 or 2 of these packets are highly suspicious (e.g., Session Hijack, Botnet, or DDoS attempt).
-        For each packet, generate simulated HTTP/TCP headers or metadata as a JSON string and a hexadecimal payload string representing the packet contents.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.INTEGER },
-                source: { type: Type.STRING },
-                dest: { type: Type.STRING },
-                protocol: { type: Type.STRING },
-                size: { type: Type.STRING },
-                status: { type: Type.STRING },
-                headers: { type: Type.STRING },
-                payloadHex: { type: Type.STRING }
-              }
-            }
-          }
-        }
-      });
-      let text = response.text || "[]";
-      if (text.includes('```')) {
-        text = text.replace(/```[a-zA-Z]*\n/gi, '').replace(/```/g, '').trim();
-      }
-      packets = safeJsonParse(text);
-      anomalies = packets.filter(p => p.status !== 'Safe');
-    } catch (e: any) {
-      const isQuotaError = e?.message?.includes('429') || e?.status === 'RESOURCE_EXHAUSTED' || e?.status === 429 || String(e).includes('429') || String(e).includes('RESOURCE_EXHAUSTED');
-      if (!isQuotaError) console.error("Network scan API failed", e);
-      // Fallback
-      packets = [
-        { id: 1, source: '192.168.1.1', dest: '104.22.3.1', protocol: 'HTTPS', size: '4.5KB', status: 'Safe' },
-        { id: 2, source: 'Botnet-Node-X', dest: '192.168.1.1', protocol: 'SYN', size: '128B', status: 'Malicious' }
-      ];
-      anomalies = packets.filter(p => p.status !== 'Safe');
-    }
-
-    if (anomalies.length > 0) {
-      const hijackCount = anomalies.filter(a => a.status === 'SessionHijack').length;
-      await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-        uid: user.uid,
-        title: hijackCount > 0 ? "Session Hijacking Blocked" : "Network Anomaly Detected",
-        message: hijackCount > 0 
-          ? `AI Auto-Blocked ${hijackCount} session hijacking attempts from unauthorized proxies.`
-          : `Blocked ${anomalies.length} suspicious packets including a potential Botnet connection.`,
-        severity: hijackCount > 0 ? "critical" : "warning",
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    logActivity('network_scan_completed', { anomaliesCount: anomalies.length });
-    return { packets, anomalies };
+    if (!user) throw new Error('Sign in to access network diagnostics.');
+    logActivity('network_scan_unavailable', { reason: 'browser_sandbox_no_packet_capture' });
+    throw new Error('Live packet capture is not available to a normal web page. Connect a trusted network sensor or endpoint agent before enabling network monitoring. No packets were scanned and no threats were blocked.');
   };
 
   const scanDevice = async () => {
-    if (!user) return;
-    
-    if (profile && !profile.isPremium) {
-      if (profile.virusScansLeft <= 0) throw new Error('LIMIT_REACHED');
-    }
-
-    logActivity('device_scan_started');
-
-    const navInfo = {
-      userAgent: navigator.userAgent,
-      language: navigator.language,
-      platform: navigator.platform,
-      hardwareConcurrency: navigator.hardwareConcurrency,
-      deviceMemory: (navigator as any).deviceMemory,
-    };
-
-    let threats = [];
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze the following navigator / device information for any potential security anomalies or vulnerabilities.
-        Device Info: ${JSON.stringify(navInfo)}
-        Then generate a simulated list of 0-3 hypothetical vulnerabilities or malwares (e.g., outdated platform risk, mock spyware) that might exist on such a device.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                type: { type: Type.STRING },
-                risk: { type: Type.STRING },
-                path: { type: Type.STRING }
-              }
-            }
-          }
-        }
-      });
-      let text = response.text || "[]";
-      if (text.includes('```')) {
-        text = text.replace(/```[a-zA-Z]*\n/gi, '').replace(/```/g, '').trim();
-      }
-      threats = safeJsonParse(text);
-    } catch(e: any) {
-      const isQuotaError = e?.message?.includes('429') || e?.status === 'RESOURCE_EXHAUSTED' || e?.status === 429 || String(e).includes('429') || String(e).includes('RESOURCE_EXHAUSTED');
-      if (!isQuotaError) console.error("Device scan API failed", e);
-      threats = [];
-    }
-    
-    if (profile && !profile.isPremium) {
-      await updateDoc(doc(db, 'users', user.uid), { virusScansLeft: (profile.virusScansLeft || 5) - 1 });
-    }
-
-    if (threats.length > 0) {
-      await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-        uid: user.uid,
-        title: "Device Threat Detected",
-        message: `Found ${threats.length} threats/vulnerabilities on your device across ${navigator.platform}. AI is attempting automatic mitigation.`,
-        severity: "critical",
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    logActivity('device_scan_completed', { threatsFound: threats.length });
-    return threats;
+    if (!user) throw new Error('Sign in to access device diagnostics.');
+    logActivity('device_scan_unavailable', { reason: 'browser_sandbox_no_endpoint_scanner' });
+    throw new Error('A browser page cannot scan your installed applications, running processes, memory or full filesystem. Use the Antivirus & File Reputation page for hash-based checks, or install a signed endpoint agent for a real device scan. No device scan was performed.');
   };
 
   const optimizePhone = async () => {
-    if (!user) return;
-    logActivity('phone_optimization_started');
-    
-    let advice = "";
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: "Assume the user's mobile device has some bloated settings. Generate a short, realistic tip of exactly how a system service (like CyberAmour) just freed up memory and improved battery life, with fake metrics. Max 20 words."
-      });
-      advice = response.text.trim();
-    } catch(e) {
-      advice = "Junk files cleared & memory freed completely.";
-    }
-
-    logActivity('phone_optimization_completed');
-    return advice;
+    if (!user) throw new Error('Sign in to access device guidance.');
+    logActivity('device_optimization_unavailable', { reason: 'browser_sandbox_no_device_controls' });
+    return 'CyberAmour has not changed your device. A browser cannot safely clear system junk, free device memory, or change battery settings. Use your operating system’s built-in storage and battery tools.';
   };
 
   const monitorTransactions = async () => {
-    if (!user) return;
-    
-    const transactions = [
-      { id: 'tx1', merchant: 'Amazon', amount: '€45.00', status: 'Verified', date: 'Just now' },
-      { id: 'tx2', merchant: 'Unknown Vendor (Overseas)', amount: '€1,200.00', status: 'Fraudulent', date: '2m ago' },
-      { id: 'tx3', merchant: 'Apple Store', amount: '€9.99', status: 'Verified', date: '1h ago' }
-    ];
-
-    const fraud = transactions.filter(t => t.status === 'Fraudulent');
-    if (fraud.length > 0) {
-      await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-        uid: user.uid,
-        title: "Fraudulent Transaction Blocked",
-        message: `Blocked a suspicious transaction of ${fraud[0].amount} at ${fraud[0].merchant}.`,
-        severity: "critical",
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    return transactions;
+    if (!user) throw new Error('Sign in to access transaction monitoring.');
+    logActivity('transaction_monitoring_unavailable', { reason: 'no_financial_connector_configured' });
+    return { connected: false, transactions: [], message: 'No bank or payment provider is connected. CyberAmour has not accessed financial transactions and cannot claim to detect or block fraud until an authorized integration is configured.' };
   };
 
   const fetchThreatIntelSummary = useCallback(async (forceRefresh = false) => {
@@ -1445,7 +1212,7 @@ Return only JSON matching the supplied response schema. Do not include unsupport
     isThreatIntelFetching = (async () => {
       try {
         const response = await ai.models.generateContent({
-          model: "gemini-3.1-pro-preview",
+          model: "gemini-2.5-flash",
           contents: `Perform a search for the most recent global cyberattacks, data breaches, and emerging threat intelligence in the last 24-48 hours. You are CyberAmour's Global Threat Intel AI. Using your search results, provide a detailed summary structured with the following MD headers:
           
 ### 📈 Recent Cyberattack Trends
@@ -1462,7 +1229,8 @@ Use bullet points for readability. Make it sound highly professional, actionable
             tools: [{ googleSearch: {} }]
           }
         });
-        cachedThreatIntel = response.text || "No intelligence data available.";
+        const cited = (Array.isArray(response.groundingSources) ? response.groundingSources : []).filter((source: any) => source.url).map((source: any) => `- ${source.title || source.url}: ${source.url}`).join('\n');
+        cachedThreatIntel = `${response.text || 'No intelligence data available.'}${cited ? `\n\n### Grounding Sources\n${cited}` : '\n\nNo grounding source links were returned; verify claims independently.'}`;
         return cachedThreatIntel;
       } catch (e: any) {
         const isQuotaError = e?.message?.includes('429') || e?.status === 'RESOURCE_EXHAUSTED' || e?.status === 429;
@@ -1478,29 +1246,21 @@ Use bullet points for readability. Make it sound highly professional, actionable
     return isThreatIntelFetching;
   }, []);
 
-  let cachedDeviceIntel: string | null = null;
-  let isDeviceIntelFetching: Promise<string> | null = null;
-
   const fetchDeviceIntelSummary = useCallback(async () => {
-    if (cachedDeviceIntel) return cachedDeviceIntel;
-    if (isDeviceIntelFetching) return isDeviceIntelFetching;
-    
-    isDeviceIntelFetching = (async () => {
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: `Create a brief, localized security intelligence summary for this specific device. Mention status of realtime antivirus protection, firewall, anomalous apps, and permissions. Format as an alert summary using markdown.`
-        });
-        cachedDeviceIntel = response.text || "No local device intelligence data available.";
-        return cachedDeviceIntel;
-      } catch (e: any) {
-        cachedDeviceIntel = "Unable to retrieve real-time device intelligence currently.";
-        return cachedDeviceIntel;
-      } finally {
-        isDeviceIntelFetching = null;
-      }
-    })();
-    return isDeviceIntelFetching;
+    if (typeof navigator === 'undefined') return 'Device details are unavailable in this environment.';
+    const ua = navigator.userAgent || 'Unknown browser';
+    const deviceType = /ipad|tablet/i.test(ua) ? 'Tablet' : /mobi|android|iphone/i.test(ua) ? 'Phone' : 'Desktop or laptop browser';
+    const browser = /Edg\//.test(ua) ? 'Microsoft Edge' : /Firefox\//.test(ua) ? 'Mozilla Firefox' : /Chrome\//.test(ua) ? 'Chrome-based browser' : /Safari\//.test(ua) ? 'Safari' : 'Unknown browser';
+    const platform = navigator.platform || 'Not exposed by browser';
+    return `### Browser-visible device context
+- **Device category:** ${deviceType}
+- **Browser family:** ${browser}
+- **Platform string:** ${platform}
+- **Language:** ${navigator.language || 'Not exposed'}
+- **Logical CPU count:** ${navigator.hardwareConcurrency || 'Not exposed'}
+
+### Not checked by this web app
+This browser cannot verify antivirus status, firewall configuration, installed applications, running processes, device permissions, or full-disk malware. No endpoint scan was performed. Connect a signed endpoint agent to collect those details.`;
   }, []);
 
   return {
@@ -1547,46 +1307,6 @@ Use bullet points for readability. Make it sound highly professional, actionable
     logActivity,
     aiAdvice,
     detectAnomalies,
-    getGlobalThreatData: () => ({
-      mitreAttack: [
-        { tactic: 'Initial Access', count: 2450, framework: 'Mitre ATT&CK' },
-        { tactic: 'Execution', count: 1840, framework: 'Mitre ATT&CK' },
-        { tactic: 'Persistence', count: 1450, framework: 'Mitre ATT&CK' },
-        { tactic: 'Privilege Escalation', count: 1020, framework: 'Mitre ATT&CK' },
-        { tactic: 'Defense Evasion', count: 980, framework: 'Mitre ATT&CK' },
-        { tactic: 'Credential Access', count: 1650, framework: 'Mitre ATT&CK' },
-        { tactic: 'Exfiltration', count: 1320, framework: 'Mitre ATT&CK' }
-      ],
-      stride: [
-        { threat: 'Spoofing', count: 1280, framework: 'STRIDE' },
-        { threat: 'Tampering', count: 840, framework: 'STRIDE' },
-        { threat: 'Repudiation', count: 320, framework: 'STRIDE' },
-        { threat: 'Information Disclosure', count: 1600, framework: 'STRIDE' },
-        { threat: 'Denial of Service', count: 1750, framework: 'STRIDE' },
-        { threat: 'Elevation of Privilege', count: 950, framework: 'STRIDE' }
-      ],
-      owasp: [
-        { risk: 'Broken Access Control', count: 2450, framework: 'OWASP Top 10' },
-        { risk: 'Cryptographic Failures', count: 1920, framework: 'OWASP Top 10' },
-        { risk: 'Injection', count: 1580, framework: 'OWASP Top 10' },
-        { risk: 'Insecure Design', count: 1160, framework: 'OWASP Top 10' },
-        { risk: 'Security Misconfiguration', count: 2100, framework: 'OWASP Top 10' },
-        { risk: 'Vulnerable Components', count: 1800, framework: 'OWASP Top 10' },
-        { risk: 'Auth Failures', count: 1340, framework: 'OWASP Top 10' }
-      ],
-      compliance: [
-        { standard: 'ISO 27001', violations: 120, status: 'Critical' },
-        { standard: 'NIST', violations: 85, status: 'Warning' },
-        { standard: 'GDPR', violations: 210, status: 'Critical' },
-        { standard: 'HIPAA', violations: 45, status: 'Warning' }
-      ],
-      regions: [
-        { name: 'North America', threats: 4500 },
-        { name: 'Europe', threats: 3800 },
-        { name: 'Asia', threats: 5200 },
-        { name: 'Africa', threats: 1200 },
-        { name: 'South America', threats: 1800 }
-      ]
-    })
+    getGlobalThreatData: () => ({ mitreAttack: [], stride: [], owasp: [], compliance: [], regions: [] })
   };
 }
