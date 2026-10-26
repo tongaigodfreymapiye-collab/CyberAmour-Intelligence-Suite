@@ -43,22 +43,27 @@ async function releaseOwnerDeviceSession(uid: string) {
 
 async function enforceOwnerDeviceLimit(account: User) {
   if (!isPermanentOwner(account) || typeof window === 'undefined') return true;
-  const deviceId = getBrowserDeviceId();
-  const accessRef = doc(db, 'users', account.uid, 'deviceAccess', 'active');
-  const now = Date.now();
-  let otherDeviceCount = 0;
-  const preflight = await getDoc(accessRef);
-  if (preflight.exists()) {
-    const sessions = Array.isArray(preflight.data().sessions) ? preflight.data().sessions : [];
-    const active = sessions.filter((session: any) => Number(session.lastSeen || 0) > now - OWNER_DEVICE_TTL_MS);
-    otherDeviceCount = active.filter((session: any) => session.id !== deviceId).length;
-    if (active.some((session: any) => session.id === deviceId)) otherDeviceCount = active.length - 1;
-    if (otherDeviceCount > 0) {
-      const proceed = window.confirm(`CyberAmour account notice: you are already logged in on ${otherDeviceCount} other device(s). Continue on this device? You can use up to ${OWNER_DEVICE_LIMIT} devices at a time.`);
-      if (!proceed) { await signOut(auth); return false; }
-    }
-  }
+
+  // Device-limit enforcement is best-effort client functionality. It must never hold
+  // Firebase authentication hostage when Firestore is slow, offline, or denies access.
   try {
+    const deviceId = getBrowserDeviceId();
+    const accessRef = doc(db, 'users', account.uid, 'deviceAccess', 'active');
+    const now = Date.now();
+    const preflight = await getDoc(accessRef);
+    if (preflight.exists()) {
+      const sessions = Array.isArray(preflight.data().sessions) ? preflight.data().sessions : [];
+      const active = sessions.filter((session: any) => Number(session.lastSeen || 0) > now - OWNER_DEVICE_TTL_MS);
+      const otherDeviceCount = active.filter((session: any) => session.id !== deviceId).length;
+      if (otherDeviceCount > 0) {
+        const proceed = window.confirm(`CyberAmour account notice: you are already logged in on ${otherDeviceCount} other device(s). Continue on this device? You can use up to ${OWNER_DEVICE_LIMIT} devices at a time.`);
+        if (!proceed) {
+          await signOut(auth);
+          return false;
+        }
+      }
+    }
+
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(accessRef);
       const raw = snap.exists() && Array.isArray(snap.data().sessions) ? snap.data().sessions : [];
@@ -73,13 +78,11 @@ async function enforceOwnerDeviceLimit(account: User) {
   } catch (error: any) {
     if (error?.message === 'CYBERAMOUR_DEVICE_LIMIT') {
       window.alert(`CyberAmour device limit reached. This account is already active on ${OWNER_DEVICE_LIMIT} devices. Sign out from one of those devices before signing in here.`);
-      await signOut(auth);
+      try { await signOut(auth); } catch (signOutError) { console.error('Could not sign out after device limit was reached.', signOutError); }
       return false;
     }
-    console.error('Could not verify CyberAmour device access.', error);
-    window.alert('CyberAmour could not verify the active-device limit. For your security, this login will be cancelled. Please check your connection and try again.');
-    await signOut(auth);
-    return false;
+    console.error('Could not verify CyberAmour device access; allowing authentication to continue.', error);
+    return true;
   }
 }
 
@@ -124,23 +127,30 @@ export function useCyberAmour() {
     targetScreen: null
   });
   const [loading, setLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [is2FAVerified, setIs2FAVerified] = useState(false);
 
   useEffect(() => {
     let lastObservedUser: User | null = null;
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      if (u && isPermanentOwner(u)) {
-        const allowed = await enforceOwnerDeviceLimit(u);
-        if (!allowed) return;
-      }
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      // Update React immediately. Optional Firestore device checks run separately so
+      // a slow Firestore request cannot leave the user stranded on the login screen.
       if (!u && lastObservedUser && isPermanentOwner(lastObservedUser)) {
-        await releaseOwnerDeviceSession(lastObservedUser.uid);
+        void releaseOwnerDeviceSession(lastObservedUser.uid);
       }
-      if (u && isPermanentOwner(u)) window.localStorage.setItem('cyberamour_owner_last_uid', u.uid);
+      if (u && isPermanentOwner(u)) {
+        try { window.localStorage.setItem('cyberamour_owner_last_uid', u.uid); } catch (error) {
+          console.warn('Could not save owner account hint in local storage.', error);
+        }
+        void enforceOwnerDeviceLimit(u).catch((error) => {
+          console.error('Owner device check failed unexpectedly; authentication remains active.', error);
+        });
+      }
       lastObservedUser = u;
       setUser(u);
       if (!u) {
         setProfile(null);
+        setProfileLoadError(null);
         setBreaches([]);
         setScans([]);
         setVault([]);
@@ -178,7 +188,19 @@ export function useCyberAmour() {
     if (!user) return;
 
     const userRef = doc(db, 'users', user.uid);
+    setLoading(true);
+    setProfileLoadError(null);
+    let profileSnapshotReceived = false;
+    const profileLoadTimer = window.setTimeout(() => {
+      if (!profileSnapshotReceived) {
+        setProfileLoadError('Sign-in succeeded, but CyberAmour has not received your Firestore profile yet. Check the connection and Firebase Firestore access, then retry.');
+        setLoading(false);
+      }
+    }, 15000);
     const unsubProfile = onSnapshot(userRef, (doc) => {
+      profileSnapshotReceived = true;
+      window.clearTimeout(profileLoadTimer);
+      setProfileLoadError(null);
       if (doc.exists()) {
         const data = doc.data();
         // Owner entitlement is derived from the authenticated Firebase account email, never from editable profile fields.
@@ -218,6 +240,12 @@ export function useCyberAmour() {
         } : newProfile);
         setIs2FAVerified(true);
       }
+      setLoading(false);
+    }, (error) => {
+      profileSnapshotReceived = true;
+      window.clearTimeout(profileLoadTimer);
+      console.error('Could not load the signed-in user profile from Firestore.', error);
+      setProfileLoadError(`Sign-in succeeded, but the account profile could not be read (${error?.code || 'connection error'}). Check Firestore rules and project configuration, then retry.`);
       setLoading(false);
     });
 
@@ -268,6 +296,7 @@ export function useCyberAmour() {
     });
 
     return () => {
+      window.clearTimeout(profileLoadTimer);
       unsubProfile();
       unsubBreaches();
       unsubScans();
@@ -621,6 +650,7 @@ export function useCyberAmour() {
     } catch (error) {
       console.error("Login failed", error);
       import('../utils/sounds').then(s => s.playErrorSound());
+      throw error;
     }
   };
 
@@ -771,32 +801,7 @@ Return only JSON matching the supplied response schema. Do not include unsupport
                   name: { type: Type.STRING },
                   fullName: { type: Type.STRING, nullable: true },
                   alias: { type: Type.STRING, nullable: true },
-                  emails: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                  phoneNumbers: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                  publicSpacesLinked: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                  photoUrl: { type: Type.STRING, nullable: true },
-                  dateOfBirth: { type: Type.STRING, nullable: true },
-                  age: { type: Type.INTEGER, nullable: true },
-                  sex: { type: Type.STRING, nullable: true },
-                  profession: { type: Type.STRING, nullable: true },
-                  maritalStatus: { type: Type.STRING, nullable: true },
-                  relationshipStatus: { type: Type.STRING, nullable: true },
-                  previousMarriages: { type: Type.STRING, nullable: true },
-                  workHistory: { type: Type.STRING, nullable: true },
-                  financialCredibilityForLoans: { type: Type.STRING, nullable: true },
-                  characterCredibilityForBusiness: { type: Type.STRING, nullable: true },
-                  location: { type: Type.STRING, nullable: true },
                   description: { type: Type.STRING, nullable: true },
-                  history: { type: Type.STRING, nullable: true },
-                  characterAssessment: { type: Type.STRING, nullable: true },
-                  criminalRecords: { type: Type.STRING, nullable: true },
-                  relationshipHistory: { type: Type.STRING, nullable: true },
-                  moralFidelity: { type: Type.STRING, nullable: true },
-                  sexTapeLeakages: { type: Type.STRING, nullable: true },
-                  sexualScandals: { type: Type.STRING, nullable: true },
-                  characterCredibilityScore: { type: Type.INTEGER, nullable: true },
-                  characterRiskScore: { type: Type.INTEGER, nullable: true },
-                  creditWorthiness: { type: Type.STRING, nullable: true },
                   socialMediaProfiles: {
                     type: Type.ARRAY,
                     nullable: true,
@@ -852,17 +857,6 @@ Return only JSON matching the supplied response schema. Do not include unsupport
                 }
               }
             },
-            leakages: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  source: { type: Type.STRING },
-                  date: { type: Type.STRING },
-                  dataExposed: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-              }
-            },
             websites: { type: Type.ARRAY, items: { type: Type.STRING } }
           }
         } : {
@@ -899,6 +893,17 @@ Return only JSON matching the supplied response schema. Do not include unsupport
         cleanedText = cleanedText.replace(/```[a-zA-Z]*\n/gi, '').replace(/```/g, '').trim();
       }
       const result = safeJsonParse(cleanedText);
+      // Generic OSINT is cybersecurity-focused; discard private-life or intimate-content fields returned unexpectedly.
+      const restrictedFields = ['maritalStatus','relationshipStatus','previousMarriages','relationshipHistory','moralFidelity','sexTapeLeakages','sexualScandals','characterAssessment','characterCredibilityScore','characterRiskScore','creditWorthiness','financialCredibilityForLoans','emails','phoneNumbers','dateOfBirth','age','sex','photoUrl','location','leakages'];
+      for (const restrictedField of restrictedFields) delete (result as any)[restrictedField];
+      if (Array.isArray((result as any).candidates)) {
+        (result as any).candidates = (result as any).candidates.map((candidate: any) => {
+          const copy = { ...candidate };
+          for (const restrictedField of [...restrictedFields, 'characterCredibilityForBusiness','workHistory','profession','criminalRecords','history']) delete copy[restrictedField];
+          return copy;
+        });
+      }
+
       
       await addDoc(collection(db, 'users', user.uid, 'scans'), {
         uid: user.uid,
@@ -921,17 +926,8 @@ Return only JSON matching the supplied response schema. Do not include unsupport
         await addDoc(collection(db, 'users', user.uid, 'alerts'), {
           uid: user.uid,
           title: result.verdict === 'Malicious' ? "Urgent Threat Detected" : "Suspicious Information Found",
-          message: `Your recent scan of ${type} "${content}" flagged potential threats or leakages. Please review the scan results carefully.`,
+          message: `Your recent scan of ${type} "${content}" flagged a potential cybersecurity risk. Review the linked source evidence and limitations before acting.`,
           severity: result.verdict === 'Malicious' ? "critical" : "high",
-          isRead: false,
-          createdAt: new Date().toISOString()
-        });
-      } else if (result.leakages && result.leakages.length > 0) {
-        await addDoc(collection(db, 'users', user.uid, 'alerts'), {
-          uid: user.uid,
-          title: "Public Leakages Found",
-          message: `Your recent scan of ${type} "${content}" revealed ${result.leakages.length} public leakages. This information is accessible online.`,
-          severity: "medium",
           isRead: false,
           createdAt: new Date().toISOString()
         });
@@ -939,11 +935,14 @@ Return only JSON matching the supplied response schema. Do not include unsupport
 
       return result;
     } catch (error: any) {
-      const isQuotaError = error?.message?.includes('429') || error?.status === 'RESOURCE_EXHAUSTED' || error?.status === 429 || String(error).includes('429') || String(error).includes('RESOURCE_EXHAUSTED');
-      if (!isQuotaError) {
-        console.error("Scan failed", error);
-      }
-      return { verdict: 'Unknown', confidence: 0, reason: "Scan could not be completed at this time due to high traffic.", recommendedAction: "Please try again later.", type: 'system', details: [] };
+      console.error('CyberAmour scan failed; no result was produced', error);
+      const errorCode = String(error?.code || error?.status || 'unknown');
+      const reason = errorCode.includes('permission-denied') || errorCode.includes('unauthenticated')
+        ? 'The scan was blocked by account or Firebase permissions. No scan result was produced.'
+        : errorCode.includes('resource-exhausted') || errorCode.includes('429')
+          ? 'The configured provider quota or rate limit was reached. No scan result was produced.'
+          : 'The scan service failed or is not configured. No scan result was produced; retry after checking the backend and provider configuration.';
+      return { verdict: 'Unknown', confidence: 0, reason, recommendedAction: 'Check the displayed error, Firebase Functions logs, provider configuration and account permissions before retrying.', type: 'system', details: [], errorCode };
     }
   };
 
@@ -1195,7 +1194,12 @@ Return only JSON matching the supplied response schema. Do not include unsupport
       if (!isQuotaError) {
         console.error("Dark web scan failed", error);
       }
-      return { findings: [], summary: "Scan could not be completed at this time. Please try again later." };
+      const message = error?.code === 'permission-denied'
+        ? 'Public-source search was blocked by account or Firestore permissions. No exposure conclusion was produced.'
+        : (String(error?.message || '').includes('429') || String(error?.status || '').includes('RESOURCE_EXHAUSTED'))
+          ? 'The configured AI/search provider quota was reached. No exposure conclusion was produced.'
+          : 'Public-source search failed or is not configured. No exposure conclusion was produced; check Firebase Functions logs and provider configuration.';
+      throw new Error(message);
     }
   };
 
@@ -1294,6 +1298,7 @@ This browser cannot verify antivirus status, firewall configuration, installed a
     scoreHistory,
     weather,
     loading,
+    profileLoadError,
     is2FAVerified,
     login,
     logout,

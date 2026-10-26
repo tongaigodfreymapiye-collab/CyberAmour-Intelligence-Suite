@@ -112,3 +112,60 @@
   100% { background-position: 0% 50%; }
 }
 
+
+/* CyberAmour sidebar brand layout fix: keep the product name inside the sidebar. */
+@media (min-width: 1024px) {
+  aside[class~="lg:flex"][class~="w-64"] {
+    box-sizing: border-box;
+    padding: 1.25rem;
+    overflow-x: hidden;
+  }
+
+  aside[class~="lg:flex"][class~="w-64"] > div:first-child {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  aside[class~="lg:flex"][class~="w-64"] > div:first-child > img {
+    display: block;
+    width: 108px;
+    max-width: 100%;
+    height: auto;
+    flex: 0 1 auto;
+  }
+
+  aside[class~="lg:flex"][class~="w-64"] > div:first-child > div {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    text-align: center;
+    font-size: 1.125rem;
+    line-height: 1.25;
+    letter-spacing: -0.03em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  aside[class~="lg:flex"][class~="w-64"] > div:nth-child(2) {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+    line-height: 1.6;
+    margin-bottom: 1.5rem !important;
+    overflow-wrap: anywhere;
+  }
+
+  aside[class~="lg:flex"][class~="w-64"] nav,
+  aside[class~="lg:flex"][class~="w-64"] nav ul,
+  aside[class~="lg:flex"][class~="w-64"] nav li {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
