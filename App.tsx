@@ -121,7 +121,7 @@ import { useCyberAmour } from './hooks/useCyberAmour';
 import { cn } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { QRCodeSVG } from 'qrcode.react';
-import { db, auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as updateFirebaseProfile } from './firebase';
+import { db, auth, functions, httpsCallable, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile as updateFirebaseProfile } from './firebase';
 import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 
 const CyberAmourLogo = ({ size = 72, className = "" }: { size?: number, className?: string }) => (
@@ -150,7 +150,7 @@ import { WorldClock } from './components/WorldClock';
 import { DeviceHealthChart } from './components/DeviceHealthChart';
 import EnterpriseRiskWorkspace from './components/EnterpriseRiskWorkspace';
 
-type Screen = 'dashboard' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
+type Screen = 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
 
 export default function App() {
   // Add global click sound
@@ -211,7 +211,7 @@ export default function App() {
     detectAnomalies
   } = useCyberAmour();
 
-  const isPermanentOwner = user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
+  const isPermanentOwner = user?.emailVerified === true && user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
   const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
   const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
 
@@ -428,6 +428,7 @@ export default function App() {
             <SidebarItem active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={18} />} label="Risk Assessments" />
             <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC & Controls" />
             <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="Threat Intelligence & OSINT" />
+            <SidebarItem active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={18} />} label="Antivirus & File Scan" />
             <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Security Scans" />
             <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Dark Web Exposure" />
             <SidebarItem active={activeScreen === 'network'} onClick={() => setActiveScreen('network')} icon={<Network size={18} />} label="Network & Device" />
@@ -438,7 +439,7 @@ export default function App() {
             <SidebarItem active={activeScreen === 'ai'} onClick={() => setActiveScreen('ai')} icon={<MessageSquare size={18} />} label="AI Security Assistant" />
             <SidebarItem active={activeScreen === 'alerts'} onClick={() => setActiveScreen('alerts')} icon={<Bell size={18} />} label="Notifications" />
             <SidebarItem active={activeScreen === 'guide'} onClick={() => setActiveScreen('guide')} icon={<BookOpen size={18} className="text-success" />} label="User Guide & Help" />
-            <SidebarItem active={activeScreen === 'pricing'} onClick={() => setActiveScreen('pricing')} icon={<CreditCard size={18} />} label="Plan & Billing" />
+            {!isPermanentOwner && <SidebarItem active={activeScreen === 'pricing'} onClick={() => setActiveScreen('pricing')} icon={<CreditCard size={18} />} label="Plan & Billing" />}
             <SidebarItem active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={18} />} label="Settings & Devices" />
             {isPermanentOwner && <SidebarItem active={activeScreen === 'admin'} onClick={() => setActiveScreen('admin')} icon={<ShieldAlert size={18} />} label="Administration" />}
             <SidebarItem active={false} onClick={() => setShowTutorial(true)} icon={<HelpCircle size={18} />} label="Launch Tutorial" />
@@ -530,17 +531,18 @@ export default function App() {
               {activeScreen === 'osint' && <EnterpriseRiskWorkspace key="osint" section="osint" onLiveOsint={performPhishingScan} />}
               {activeScreen === 'cases' && <EnterpriseRiskWorkspace key="cases" section="cases" />}
               {activeScreen === 'reports' && <EnterpriseRiskWorkspace key="reports" section="reports" />}
-              {activeScreen === 'dashboard' && <Dashboard key="dashboard" askAI={askAI} setActiveScreen={setActiveScreen} fetchDeviceIntelSummary={fetchDeviceIntelSummary} fetchThreatIntelSummary={fetchThreatIntelSummary} profile={profile} breaches={breaches} scans={scans}  globalThreats={getGlobalThreatData()} activityLogs={activityLogs} scoreHistory={scoreHistory} detectAnomalies={detectAnomalies} weather={weather} toggleAutoMonitoring={toggleAutoMonitoring} autoRectify={autoRectify} optimizePhone={optimizePhone} createAlert={createAlert} performScan={performPhishingScan} logActivity={logActivity} />}
+              {activeScreen === 'dashboard' && <Dashboard key="dashboard" isPermanentOwner={isPermanentOwner} askAI={askAI} setActiveScreen={setActiveScreen} fetchDeviceIntelSummary={fetchDeviceIntelSummary} fetchThreatIntelSummary={fetchThreatIntelSummary} profile={profile} breaches={breaches} scans={scans}  globalThreats={getGlobalThreatData()} activityLogs={activityLogs} scoreHistory={scoreHistory} detectAnomalies={detectAnomalies} weather={weather} toggleAutoMonitoring={toggleAutoMonitoring} autoRectify={autoRectify} optimizePhone={optimizePhone} createAlert={createAlert} performScan={performPhishingScan} logActivity={logActivity} />}
+              {activeScreen === 'antivirus' && <AntivirusCenter />}
               {activeScreen === 'scan' && <ScanCenter key="scan" askAI={askAI} scans={scans} performScan={performPhishingScan} rewardUserWithScan={rewardUserWithScan} checkBreaches={checkBreaches} logActivity={logActivity} setActiveScreen={setActiveScreen} profile={profile} activeLinkSource={activeLinkSource} setActiveLinkSource={setActiveLinkSource} setShowLinkModal={setShowLinkModal} linkages={linkages} />}
               {activeScreen === 'network' && <NetworkDeviceMonitor key="network" setActiveScreen={setActiveScreen} scanNetwork={scanNetwork} scanDevice={scanDevice} monitorTransactions={monitorTransactions} profile={profile} activeLinkSource={activeLinkSource} setActiveLinkSource={setActiveLinkSource} setShowLinkModal={setShowLinkModal} linkages={linkages} />}
               {activeScreen === 'darkweb' && <DarkWebMonitor key="darkweb" askAI={askAI} profile={profile} breaches={breaches} scans={scans} scanDarkWeb={scanDarkWeb} setActiveScreen={setActiveScreen} />}
               {activeScreen === 'alerts' && <Alerts key="alerts" alerts={alerts} profile={profile} setActiveScreen={setActiveScreen} />}
               {activeScreen === 'clock' && <WorldClock key="clock" />}
               {activeScreen === 'ai' && <AIAssistant key="ai" askAI={askAI} logActivity={logActivity} profile={profile} setActiveScreen={setActiveScreen} alerts={alerts} activityLogs={activityLogs} />}
-              {activeScreen === 'features' && <KeyFeatures key="features" setActiveScreen={setActiveScreen} />}
+              {activeScreen === 'features' && <KeyFeatures key="features" setActiveScreen={setActiveScreen} isPermanentOwner={isPermanentOwner} />}
               {activeScreen === 'guide' && <UserGuide key="guide" setActiveScreen={setActiveScreen} />}
               {activeScreen === 'tasks' && <TaskManagement key="tasks" profile={profile} user={user} />}
-              {activeScreen === 'pricing' && <PricingScreen key="pricing" profile={profile} upgrade={upgradeSubscription} startCheckout={startCheckout} redeemActivationCode={redeemActivationCode} />}
+              {activeScreen === 'pricing' && (isPermanentOwner ? <OwnerEntitlementScreen /> : <PricingScreen key="pricing" profile={profile} upgrade={upgradeSubscription} startCheckout={startCheckout} redeemActivationCode={redeemActivationCode} />)}
               {activeScreen === 'admin' && <AdminQueue key="admin" generateActivationCode={generateActivationCode} />}
               {activeScreen === 'settings' && (
                 <SettingsScreen 
@@ -606,16 +608,7 @@ export default function App() {
           </section>
 
           <section className="mt-auto">
-            <div className="text-[10px] text-text-dim uppercase tracking-widest mb-4">Phone Optimizer</div>
-            <div className="glass-card p-4 space-y-3">
-              <div className="flex justify-between text-[11px]">
-                <span>Storage Junk</span>
-                <span className="text-accent">1.2 GB</span>
-              </div>
-              <div className="w-full h-1 bg-bg rounded-full overflow-hidden">
-                <div className="h-full bg-primary w-[70%]" />
-              </div>
-            </div>
+            <DeviceNetworkSummary />
           </section>
         </div>
       </aside>
@@ -625,7 +618,7 @@ export default function App() {
         <NavButton active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={20} />} label="Home" />
         <NavButton active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={20} />} label="OSINT" />
         <NavButton active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={20} />} label="Risk" />
-        <NavButton active={activeScreen === 'cases'} onClick={() => setActiveScreen('cases')} icon={<Fingerprint size={20} />} label="Cases" />
+        <NavButton active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={20} />} label="Antivirus" />
         <NavButton active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={20} />} label="Menu" />
       </nav>
 
@@ -992,8 +985,8 @@ function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
             className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
           >
             <div>{errorMsg}</div>
-            {setActiveScreen && (
-              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
+            {setActiveScreen && /LIMIT_REACHED|limit reached/i.test(String(errorMsg)) && (
+              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">View plans</button>
             )}
           </motion.div>
         )}
@@ -1106,18 +1099,26 @@ function ScanTimeline({ result, scanType }: any) {
 }
 
 function RealtimeAlerts({ alerts }: { alerts: any[] }) {
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('cyberamour_dismissed_alerts') || '[]'); } catch { return []; }
+  });
   const [visibleAlerts, setVisibleAlerts] = useState<any[]>([]);
 
   useEffect(() => {
-    // Show unread alerts that were created within the last 15 seconds
-    const now = new Date().getTime();
+    const now = Date.now();
     const recentUnread = alerts.filter(a => {
-      if (a.isRead) return false;
-      const createdAtTime = new Date(a.createdAt).getTime();
-      return now - createdAtTime < 15000;
+      if (a.isRead || dismissedIds.includes(String(a.id))) return false;
+      const raw = a.createdAt;
+      const createdAtTime = raw?.toDate ? raw.toDate().getTime() : raw?.toMillis ? raw.toMillis() : new Date(raw).getTime();
+      return Number.isFinite(createdAtTime) && now - createdAtTime < 15000;
     });
     setVisibleAlerts(recentUnread);
-  }, [alerts]);
+  }, [alerts, dismissedIds]);
+
+  const dismissAlert = (id: string) => {
+    setDismissedIds(prev => { const next = [...new Set([...prev, id])].slice(-200); localStorage.setItem('cyberamour_dismissed_alerts', JSON.stringify(next)); return next; });
+    setVisibleAlerts(prev => prev.filter(a => String(a.id) !== id));
+  };
 
   return (
     <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
@@ -1144,8 +1145,8 @@ function RealtimeAlerts({ alerts }: { alerts: any[] }) {
               )}>
                  <ShieldAlert size={16} />
               </div>
-              <div>
-                 <h4 className="text-sm font-bold capitalize text-white">{alert.title}</h4>
+              <div className="min-w-0 flex-1">
+                 <div className="flex items-start justify-between gap-2"><h4 className="text-sm font-bold capitalize text-white">{alert.title}</h4><button type="button" onClick={() => dismissAlert(String(alert.id))} className="shrink-0 rounded-md p-1 text-text-dim hover:bg-white/10 hover:text-white" aria-label={`Dismiss ${alert.title} notification`} title="Dismiss notification"><X size={15} /></button></div>
                  <p className="text-xs text-text-dim mt-1">{alert.message}</p>
                  <div className="text-[9px] uppercase tracking-widest mt-2 opacity-50 font-bold">{alert.severity} Risk Alert</div>
               </div>
@@ -1155,6 +1156,58 @@ function RealtimeAlerts({ alerts }: { alerts: any[] }) {
       </AnimatePresence>
     </div>
   );
+}
+
+function DeviceNetworkSummary() {
+  const [device, setDevice] = useState('Detecting device…');
+  const [publicIp, setPublicIp] = useState('Checking…');
+  const [network, setNetwork] = useState('Browser does not expose network type');
+  const [ipError, setIpError] = useState('');
+  useEffect(() => {
+    const ua = navigator.userAgent || '';
+    const tablet = /iPad|Tablet|PlayBook|Silk/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua));
+    const phone = /Mobi|iPhone|Android.*Mobile|Windows Phone/i.test(ua);
+    setDevice(tablet ? 'Tablet' : phone ? 'Mobile phone' : 'Desktop / laptop');
+    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    if (conn) setNetwork([conn.type, conn.effectiveType].filter(Boolean).join(' · ') || 'Connection details available');
+    fetch('https://api.ipify.org?format=json', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error('IP lookup failed'); return r.json(); })
+      .then(d => setPublicIp(typeof d.ip === 'string' ? d.ip : 'Unavailable'))
+      .catch(() => { setPublicIp('Unavailable'); setIpError('Public IP lookup failed. Check connectivity or privacy blockers.'); });
+  }, []);
+  return <div className="space-y-3"><div className="text-[10px] text-text-dim uppercase tracking-widest">Device & Network</div><div className="glass-card p-4 space-y-3 text-[11px]"><div className="flex justify-between gap-3"><span className="text-text-dim">Device type</span><strong>{device}</strong></div><div className="flex justify-between gap-3"><span className="text-text-dim">Public IP</span><strong className="text-right break-all">{publicIp}</strong></div><div className="flex justify-between gap-3"><span className="text-text-dim">Network</span><strong className="text-right">{network}</strong></div><p className="text-[10px] text-text-dim leading-relaxed">IP lookup uses api.ipify.org. Browsers cannot reliably identify the exact laptop model or inspect your private network without a native agent or authorised integration.</p>{ipError && <p role="status" className="text-accent">{ipError}</p>}</div></div>;
+}
+
+function AntivirusCenter() {
+  const [file, setFile] = useState<File | null>(null);
+  const [hash, setHash] = useState('');
+  const [status, setStatus] = useState<'idle'|'hashing'|'checking'|'done'|'error'>('idle');
+  const [report, setReport] = useState<any>(null);
+  const [message, setMessage] = useState('');
+  const chooseFile = async (next: File | null) => {
+    setFile(next); setHash(''); setReport(null); setMessage(''); setStatus('idle');
+    if (!next) return;
+    try {
+      setStatus('hashing');
+      const digest = await crypto.subtle.digest('SHA-256', await next.arrayBuffer());
+      const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+      setHash(hex); setStatus('idle');
+    } catch { setStatus('error'); setMessage('This browser could not calculate a SHA-256 hash. Try a modern browser.'); }
+  };
+  const checkReputation = async () => {
+    if (!hash) return;
+    setStatus('checking'); setReport(null); setMessage('');
+    try {
+      const lookup = httpsCallable(functions, 'lookupFileReputation');
+      const result: any = await lookup({ sha256: hash });
+      if (!result.data?.configured) { setStatus('error'); setMessage('Live file reputation is not configured yet. Set the VIRUSTOTAL_API_KEY Firebase secret and deploy the lookupFileReputation Cloud Function. No scan result has been fabricated.'); return; }
+      if (result.data?.found === false) { setReport({ ...result.data, notFound: true }); setStatus('done'); return; }
+      setReport(result.data); setStatus('done');
+    } catch (e: any) {
+      setStatus('error'); setMessage(e?.message || 'The live reputation service could not be reached. No clean verdict is assumed.');
+    }
+  };
+  return <div className="max-w-5xl mx-auto space-y-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & File Reputation</h1><p className="text-text-dim mt-2 max-w-2xl">Calculate a file's SHA-256 fingerprint locally and check its reputation against a configured live threat-intelligence provider.</p></div><span className="text-xs border border-accent/30 rounded-full px-3 py-2 text-accent">Reputation lookup · not full-device antivirus</span></div><div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm text-text-dim">Important: a website running in a browser cannot scan your entire laptop, memory, running processes or all installed apps. This page does not upload your file; it submits only the SHA-256 hash to the configured reputation service. Unknown hashes are not proof of safety.</div><div className="glass-card p-6 space-y-5"><label className="block text-sm font-semibold">Select a file to check<input type="file" className="block w-full mt-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" onChange={e => chooseFile(e.target.files?.[0] || null)} /></label>{file && <div className="rounded-xl border border-border p-4 space-y-2"><div className="flex flex-wrap justify-between gap-2"><strong>{file.name}</strong><span className="text-text-dim text-xs">{(file.size/1024).toFixed(1)} KB · {file.type || 'Unknown MIME type'}</span></div><div className="text-xs text-text-dim break-all">SHA-256: {hash || 'Calculating…'}</div></div>}<div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50" disabled={!hash || status==='checking' || status==='hashing'} onClick={checkReputation}>{status==='checking' ? 'Checking live reputation…' : 'Check live reputation'}</button><button className="rounded-xl border border-border px-5 py-3" onClick={() => {setFile(null);setHash('');setReport(null);setMessage('');setStatus('idle');}}>Clear</button></div>{status==='hashing' && <p className="text-sm text-text-dim">Calculating SHA-256 locally…</p>}{message && <p role="status" className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">{message}</p>}{report && <div className="rounded-xl border border-border p-5 space-y-3"><h2 className="text-lg font-bold">Live provider response</h2>{report.notFound ? <p className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">This hash was not found in the provider database. This is an <strong>unknown result</strong>, not a clean verdict. Use a trusted endpoint security product for a full scan.</p> : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Malicious',report.malicious],['Suspicious',report.suspicious],['Harmless',report.harmless],['Undetected',report.undetected]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-surface p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-2xl font-black">{value ?? '—'}</div></div>)}</div>}<p className="text-xs text-text-dim">Source: VirusTotal file reputation · Retrieved {report.retrievedAt || 'just now'}. Reputation results are indicative and can be incomplete.</p>{report.permalink && <a href={report.permalink} target="_blank" rel="noreferrer" className="text-primary underline text-sm">Open provider report</a>}</div>}</div></div>;
 }
 
 function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
@@ -1304,8 +1357,8 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
             className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
           >
             <div>{errorMsg}</div>
-            {setActiveScreen && (
-              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
+            {setActiveScreen && /LIMIT_REACHED|limit reached/i.test(String(errorMsg)) && (
+              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">View plans</button>
             )}
           </motion.div>
         )}
@@ -1643,7 +1696,7 @@ function ThreatMap() {
   );
 }
 
-function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThreatIntelSummary, globalThreats, activityLogs, scoreHistory, detectAnomalies, weather, toggleAutoMonitoring, autoRectify, optimizePhone, createAlert, performScan, setActiveScreen, askAI, logActivity }: any) {
+function Dashboard({ isPermanentOwner, profile, breaches, scans, fetchDeviceIntelSummary, fetchThreatIntelSummary, globalThreats, activityLogs, scoreHistory, detectAnomalies, weather, toggleAutoMonitoring, autoRectify, optimizePhone, createAlert, performScan, setActiveScreen, askAI, logActivity }: any) {
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionResult, setDetectionResult] = useState<any>(null);
   const [intelSummary, setIntelSummary] = useState<string | null>(null);
@@ -1681,9 +1734,9 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
       const result = await autoRectify();
       if (createAlert && result) {
         createAlert(
-          'Auto-Rectify Complete', 
-          `Resolved ${result.resolvedAlerts} issue(s) and boosted security score to ${result.newScore}.`, 
-          'success'
+          'Alerts Reviewed', 
+          `Marked ${result.resolvedAlerts} alert(s) as reviewed. No device files or system settings were changed.`, 
+          'low'
         );
       }
     } catch (e) {
@@ -1718,23 +1771,8 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
     return () => { mounted = false; };
   }, [fetchDeviceIntelSummary, fetchThreatIntelSummary, intelSummary, deviceIntelSummary]);
 
-  useEffect(() => {
-    let rtaInterval: NodeJS.Timeout;
-    if (isRTAActive) {
-      rtaInterval = setInterval(async () => {
-        // randomly trigger anomaly detection or block simulated threat
-        if (Math.random() > 0.85) {
-            const anomalyRes = await detectAnomalies();
-            if (anomalyRes && anomalyRes.isAnomaly && createAlert) {
-               createAlert('Threat Blocked', `Real-time Shield blocked a generic attack on your device processes`, 'medium');
-            }
-        }
-      }, 120000); // Check every 2 minutes
-    }
-    return () => {
-      if (rtaInterval) clearInterval(rtaInterval);
-    };
-  }, [isRTAActive, detectAnomalies, createAlert]);
+  // This browser app does not have a privileged endpoint agent; do not fabricate real-time block alerts.
+
 
   const handleDetect = async () => {
     setIsDetecting(true);
@@ -1770,7 +1808,7 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#00E5FF] text-white font-bold rounded-lg hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isAutoRectifying ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {isAutoRectifying ? 'Rectifying...' : 'Auto-Rectify Issues'}
+            {isAutoRectifying ? 'Reviewing alerts...' : 'Review & Resolve Alerts'}
           </button>
           <MiniWorldClock />
           {weather && <WeatherWidget weather={weather} />}
@@ -2346,33 +2384,21 @@ function Dashboard({ profile, breaches, scans, fetchDeviceIntelSummary, fetchThr
 
         <div className="glass-card p-6 space-y-4">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold">Device Security Scanner</span>
-            <span className="text-xs text-success font-bold">Secure</span>
+            <span className="text-sm font-semibold">Browser security context</span>
+            <span className="text-xs text-accent font-bold">Limited visibility</span>
           </div>
-          <div className="text-4xl font-bold">92%</div>
-          <div className="text-xs text-text-dim">OS: Android 16 (Up to date)</div>
+          <div className="text-2xl font-bold">Web session</div>
+          <div className="text-xs text-text-dim">A browser cannot inspect the full operating system or certify that this device is malware-free. Use Antivirus & File Scan for file reputation checks.</div>
+          <button onClick={() => setActiveScreen('antivirus')} className="text-xs text-primary underline">Open Antivirus & File Scan</button>
         </div>
 
         <div className="glass-card p-6 space-y-4 md:col-span-2 lg:col-span-1 border border-accent/20">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold flex items-center gap-2"><Zap size={16} className="text-success" /> Phone Optimizer</span>
-            <button 
-              onClick={async () => {
-                const btn = document.getElementById('opt-btn');
-                if (btn) btn.innerText = 'Optimizing...';
-                const res = await optimizePhone();
-                if (btn) btn.innerText = 'Optimize Again';
-                const stat = document.getElementById('opt-status');
-                if (stat) stat.innerText = res;
-              }}
-              id="opt-btn"
-              className="bg-accent/20 text-accent px-3 py-1 text-xs font-bold rounded-lg hover:bg-accent/30 transition-colors"
-            >
-              Optimize
-            </button>
+            <span className="text-sm font-semibold flex items-center gap-2"><Zap size={16} className="text-accent" /> Remediation Centre</span>
+            <button onClick={() => setActiveScreen('tasks')} className="bg-accent/20 text-accent px-3 py-1 text-xs font-bold rounded-lg hover:bg-accent/30 transition-colors">View actions</button>
           </div>
-          <div className="text-4xl font-bold">100%</div>
-          <div id="opt-status" className="text-xs text-text-dim">Junk files cleared & memory freed</div>
+          <div className="text-2xl font-bold">Review findings</div>
+          <div className="text-xs text-text-dim">CyberAmour will not claim to clear junk files or free device memory from a browser. Review findings and follow verified remediation steps.</div>
         </div>
       </div>
       <AnimatePresence>
@@ -2684,8 +2710,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
             {([
               { id: 'phishing', label: 'Phishing Analysis (Email/Text)' },
               { id: 'sms', label: 'SMS Smishing Analysis' },
-              { id: 'file', label: 'File Malware Scan' },
-              { id: 'antivirus', label: 'Full Antivirus Scan' }
+              { id: 'file', label: 'File Analysis (AI-assisted)' }
             ] as const).map((t) => (
               <button
                 key={t.id}
@@ -2775,14 +2800,11 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
                  />
                </div>
             ) : scanType === 'antivirus' ? (
-               <div className="w-full bg-surface/50 border border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center">
-                 <ShieldAlert size={48} className="text-primary mb-4" />
-                 <div className="text-lg font-bold text-text-main mb-2">
-                   Deep Device Scanner
-                 </div>
-                 <div className="text-sm text-text-dim max-w-md">
-                   Perform a comprehensive scan of your device's file system, installed applications, and memory for viruses, rootkits, and advanced persistent threats.
-                 </div>
+               <div className="w-full bg-surface/50 border border-border rounded-2xl p-8 text-center">
+                 <ShieldAlert size={40} className="text-primary mx-auto mb-4" />
+                 <div className="text-lg font-bold text-text-main mb-2">Full-device scanning is not available in a browser</div>
+                 <div className="text-sm text-text-dim max-w-xl mx-auto mb-4">Use the dedicated Antivirus & File Scan page for local SHA-256 calculation and a configured live reputation lookup. This web app cannot inspect the complete file system or running processes.</div>
+                 <button onClick={() => setActiveScreen('antivirus')} className="px-4 py-2 rounded-xl bg-primary text-white font-bold">Open Antivirus & File Scan</button>
                </div>
             ) : (
                 <>
@@ -2945,7 +2967,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
             >
               <div className="relative z-10 flex items-center gap-2">
                 <Scan size={20} />
-                {scanType === 'url' ? "Scan URL for Threats" : scanType === 'antivirus' ? "Start Antivirus Scan" : scanType === 'phishing' ? "Analyze Content" : scanType === 'file' ? "Scan File for Malware" : "Search intel"}
+                {scanType === 'url' ? "Check URL reputation" : scanType === 'antivirus' ? "Open Antivirus & File Scan" : scanType === 'phishing' ? "Analyze Content" : scanType === 'file' ? "Analyze Uploaded File" : "Search intel"}
               </div>
             </button>
           )}
@@ -4307,7 +4329,7 @@ const HighlightedText = ({ text, highlight }: { text: string, highlight: string 
   );
 };
 
-function KeyFeatures({ setActiveScreen }: any) {
+function KeyFeatures({ setActiveScreen, isPermanentOwner }: any) {
   const freeFeatures = [
     { name: 'Basic Threat Scanning', desc: 'Scan URLs and files for known threats', icon: <Search size={24} className="text-secondary" /> },
     { name: 'Security Score Dashboard', desc: 'Overview of your security posture', icon: <Shield size={24} className="text-primary" /> },
@@ -4318,11 +4340,10 @@ function KeyFeatures({ setActiveScreen }: any) {
 
   const premiumFeatures = [
     { name: 'Comprehensive Global Identity Search', desc: 'Deep AI-driven forensics into personas', icon: <UserSearch size={24} className="text-[#00E5FF]" /> },
-    { name: 'Advanced Dark Web Monitoring', desc: 'Constant surveillance and early detection', icon: <Ghost size={24} className="text-[#8B5CF6]" /> },
+    { name: 'Dark Web Exposure Checks', desc: 'Run supported exposure checks when configured; results are not continuous surveillance', icon: <Ghost size={24} className="text-[#8B5CF6]" /> },
     { name: 'AI Security Assistant (Unlimited)', desc: 'Advanced conversational AI & deep analysis', icon: <MessageSquare size={24} className="text-accent" /> },
-    { name: 'Secure VPN Connection', desc: 'Encrypted tunnel for safe browsing', icon: <Globe size={24} className="text-primary" /> },
     { name: 'Pre-Report Interactive Feedback', desc: 'Refine raw scan findings interactively', icon: <Settings size={24} className="text-success" /> },
-    { name: 'Phone Optimizer', desc: 'AI-driven system tuning', icon: <Zap size={24} className="text-success" /> },
+    { name: 'Antivirus & File Reputation', desc: 'Local SHA-256 fingerprinting and live reputation lookup when configured; not full-device antivirus', icon: <ShieldCheck size={24} className="text-success" /> },
     { name: 'Export Diagnostics', desc: 'PDF/CSV export of advanced hardware stats', icon: <Download size={24} className="text-danger" /> }
   ];
 
@@ -4337,9 +4358,9 @@ function KeyFeatures({ setActiveScreen }: any) {
            <button onClick={() => setActiveScreen?.('guide')} className="px-4 py-2 bg-surface border border-success/30 text-success rounded-xl font-bold flex gap-2 items-center hover:bg-success/10 transition">
              <BookOpen size={16} /> User Guide
            </button>
-           <button onClick={() => setActiveScreen?.('pricing')} className="px-4 py-2 bg-primary text-white rounded-xl font-bold flex gap-2 items-center hover:bg-primary/90 transition shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+           {!isPermanentOwner && <button onClick={() => setActiveScreen?.('pricing')} className="px-4 py-2 bg-primary text-white rounded-xl font-bold flex gap-2 items-center hover:bg-primary/90 transition shadow-[0_0_15px_rgba(139,92,246,0.3)]">
              <Crown size={16} /> Upgrade to Premium
-           </button>
+           </button>}
         </div>
       </div>
 
@@ -5545,7 +5566,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 <Crosshair size={14} className="text-accent" />
                 <span>Botnet Node Blocking</span>
               </div>
-              <span className="text-success font-bold">ACTIVE</span>
+              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
             </div>
           </div>
         </div>
@@ -5559,14 +5580,13 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
             </div>
             <div className="flex items-center gap-2">
               <button 
-                onClick={handleDeviceScan}
-                disabled={isScanningDevice}
+                onClick={() => setActiveScreen('antivirus')}
                 className="text-xs bg-[#1E293B] border border-[#334155] text-white px-3 py-1.5 rounded-full hover:bg-[#334155] transition-colors flex items-center gap-1.5"
               >
-                {isScanningDevice ? <RefreshCw size={12} className="animate-spin text-primary" /> : <ShieldAlert size={12} className="text-danger" />}
-                Full Antivirus Scan
+                <ShieldAlert size={12} className="text-primary" />
+                Antivirus & File Scan
               </button>
-              <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded">PREMIUM</span>
+              {!profile?.isPremium && !profile?.isOwner && <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded">PREMIUM</span>}
               <button 
                 onClick={handleDeviceScan}
                 disabled={isScanningDevice}
@@ -5586,7 +5606,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 className="p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
               >
                 <div>{errorMsg}</div>
-                {setActiveScreen && (
+                {setActiveScreen && !profile?.isPremium && !profile?.isOwner && (
                   <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">Upgrade Now</button>
                 )}
               </motion.div>
@@ -5670,7 +5690,7 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 <ShieldCheck size={14} className="text-primary" />
                 <span>Real-time Antivirus (Deep Scan)</span>
               </div>
-              <span className="text-success font-bold">ACTIVE</span>
+              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
@@ -5684,14 +5704,14 @@ function NetworkDeviceMonitor({ scanNetwork, scanDevice, monitorTransactions, pr
                 <EyeOff size={14} className="text-accent" />
                 <span>App Permission Monitor</span>
               </div>
-              <span className="text-success font-bold">ACTIVE</span>
+              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
                 <ZapOff size={14} className="text-danger" />
                 <span>Ransomware Guard</span>
               </div>
-              <span className="text-success font-bold">ACTIVE</span>
+              <span className="text-accent font-bold">NOT A LIVE BLOCKER</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2">
@@ -6425,6 +6445,10 @@ function MiniWorldClock() {
       ))}
     </div>
   );
+}
+
+function OwnerEntitlementScreen() {
+  return <div className="max-w-3xl mx-auto glass-card p-8 space-y-4"><div className="flex items-center gap-3 text-success"><Crown size={28}/><h1 className="text-2xl font-black">Lifetime Owner Access</h1></div><p className="text-text-dim">This authenticated product-owner account is configured for lifetime Premium and Business access. No subscription or upgrade is required.</p><div className="rounded-xl border border-success/30 bg-success/5 p-4 text-sm">Owner entitlements are displayed in this interface. Protected backend services must also enforce the owner entitlement before this can be considered production-secure.</div></div>;
 }
 
 function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }: any) {

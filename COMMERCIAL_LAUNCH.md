@@ -47,3 +47,26 @@ The main navigation has been simplified around the primary security workflows: S
 Risk Assessments and GRC remain separate because they serve different purposes. Investigation Cases is presented as Investigations & Evidence, and Cyber Forensics is labelled Security Scans to make its scanning workflow clearer. AI is labelled AI Security Assistant. Alerts are presented as Notifications. The dashboard title is Security Overview. These changes reorganise navigation and labels; they do not claim that placeholder integrations or simulated monitoring are production-ready.
 
 The owner entitlement is granted in the client only when Firebase Auth reports the exact owner email as verified. The owner-only five-device ledger uses Firestore under the user's own `deviceAccess/active` document. Publish the repository's Firestore rules to the correct Firebase project and test login, denial, release, and stale-session cases before relying on this limit. Because the ledger is client-driven, it is not a substitute for a trusted server-side session broker against a determined attacker.
+
+
+## Final reliability improvements
+
+- The owner entitlement is passed explicitly into the dashboard action handler to prevent an undefined-variable failure when selecting the owner-only action.
+- Realtime notification banners can be dismissed; dismissed notification IDs are stored in this browser.
+- The former hard-coded phone optimizer/storage figure was replaced by browser-derived device classification, a public-IP lookup via api.ipify.org, and network details only where the browser exposes them. Device classification cannot distinguish a desktop from a laptop reliably, so those are grouped.
+- Removed the randomly generated “Threat Blocked” alert behavior. A browser-only web app does not have authority to block processes on the user's computer.
+- The former Auto-Rectify action now only marks unread alerts as reviewed and does not fabricate endpoint repairs or inflate the security score.
+- Added a dedicated Antivirus & File Reputation page. It calculates SHA-256 locally and calls a server-side VirusTotal hash reputation lookup. It is not full-device antivirus, does not upload the file, and cannot determine whether an unknown hash is safe.
+
+### Configure live file reputation
+
+Set the Firebase Functions secret and deploy the backend function before using live reputation: `firebase functions:secrets:set VIRUSTOTAL_API_KEY`, then deploy `lookupFileReputation` with the other functions. A valid VirusTotal API key is required. Do not put API keys in the frontend or commit them to Git.
+
+### Device/network and antivirus limitations
+
+A normal browser cannot enumerate the user's full file system, inspect running processes, scan installed applications, identify the exact laptop model, or scan a private LAN without a separately installed native agent and explicit permissions. Public-IP lookup sends a request to api.ipify.org. Production endpoint antivirus/EDR requires a native agent or an integration with an existing endpoint-security provider.
+
+
+## Deployment / live-data warning
+
+The browser app currently contains legacy Gemini client calls and Vite configuration that can expose `GEMINI_API_KEY` in a public build. Before a public commercial release, move Gemini calls to authenticated Cloud Functions and remove the key from client-side Vite defines; rotate any key that has already been exposed. OSINT outputs should retain actual Google Search grounding sources and must clearly label unavailable data. A GitHub Pages frontend does not itself provide endpoint antivirus, LAN discovery, or process blocking.

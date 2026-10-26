@@ -53,7 +53,7 @@ async function enforceOwnerDeviceLimit(account: User) {
     const active = sessions.filter((session: any) => Number(session.lastSeen || 0) > now - OWNER_DEVICE_TTL_MS);
     otherDeviceCount = active.filter((session: any) => session.id !== deviceId).length;
     if (active.some((session: any) => session.id === deviceId)) otherDeviceCount = active.length - 1;
-    if (otherDeviceCount > 0 && active.length < OWNER_DEVICE_LIMIT) {
+    if (otherDeviceCount > 0) {
       const proceed = window.confirm(`CyberAmour account notice: you are already logged in on ${otherDeviceCount} other device(s). Continue on this device? You can use up to ${OWNER_DEVICE_LIMIT} devices at a time.`);
       if (!proceed) { await signOut(auth); return false; }
     }
@@ -232,7 +232,8 @@ export function useCyberAmour() {
     const unsubAlerts = onSnapshot(
       query(collection(db, 'users', user.uid, 'alerts'), orderBy('createdAt', 'desc'), limit(50)), 
       (snap) => {
-        setAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const userAlerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAlerts(isPermanentOwner(user) ? userAlerts.filter((alert: any) => !/premium required/i.test(String(alert.title || ''))) : userAlerts);
       }
     );
 
@@ -1084,12 +1085,11 @@ Return only JSON matching the supplied response schema. Do not include unsupport
     });
     await batch.commit();
     
-    // 3. Boost security score
-    const newScore = Math.min(100, (profile?.securityScore || 85) + 10);
-    await updateDoc(doc(db, 'users', user.uid), { securityScore: newScore });
-    
-    logActivity('auto_rectify_completed', { resolvedAlerts: snapshot.size, newScore });
-    return { resolvedAlerts: snapshot.size, newScore };
+    // This web application cannot safely remediate endpoint files or operating-system settings.
+    // Marking alerts as reviewed is the only action performed here; never fabricate a higher score.
+    const currentScore = profile?.securityScore ?? null;
+    logActivity('alerts_reviewed', { reviewedAlerts: snapshot.size, endpointRemediationPerformed: false });
+    return { resolvedAlerts: snapshot.size, newScore: currentScore, endpointRemediationPerformed: false };
   };
 
   const upgradeSubscription = useCallback(async (_tier: 'basic' | 'premium' | 'business' | 'forensics') => {

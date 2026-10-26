@@ -8,6 +8,7 @@ initializeApp();
 const db = getFirestore(undefined, 'ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b');
 const stripeSecret = defineSecret('STRIPE_SECRET_KEY');
 const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
+const virusTotalApiKey = defineSecret('VIRUSTOTAL_API_KEY');
 const proMonthlyPrice = defineString('STRIPE_PRICE_PRO_MONTHLY');
 const proYearlyPrice = defineString('STRIPE_PRICE_PRO_YEARLY');
 const businessMonthlyPrice = defineString('STRIPE_PRICE_BUSINESS_MONTHLY');
@@ -140,3 +141,30 @@ async function syncSubscription(uid, sub) {
     subscriptionExpiresAt: patch.currentPeriodEnd
   }, { merge: true });
 }
+
+
+// Live file hash reputation lookup. The file itself is never uploaded by this function.
+exports.lookupFileReputation = onCall({ secrets: [virusTotalApiKey], timeoutSeconds: 20 }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to check a file hash.');
+  const sha256 = String(request.data && request.data.sha256 || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(sha256)) throw new HttpsError('invalid-argument', 'A valid SHA-256 hash is required.');
+  let apiKey = '';
+  try { apiKey = virusTotalApiKey.value(); } catch (_) { apiKey = ''; }
+  if (!apiKey) return { configured: false, message: 'VirusTotal API key is not configured.' };
+  const response = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
+    method: 'GET', headers: { 'x-apikey': apiKey, 'accept': 'application/json' }
+  });
+  if (response.status === 404) return { configured: true, found: false, sha256, message: 'This hash was not found in the provider database. This does not mean the file is safe.' };
+  if (response.status === 429) throw new HttpsError('resource-exhausted', 'The threat-intelligence provider rate limit was reached. Try again later.');
+  if (!response.ok) throw new HttpsError('unavailable', `Threat-intelligence provider returned HTTP ${response.status}.`);
+  const json = await response.json();
+  const attrs = json && json.data && json.data.attributes || {};
+  const stats = attrs.last_analysis_stats || {};
+  return {
+    configured: true, found: true, sha256,
+    malicious: Number(stats.malicious || 0), suspicious: Number(stats.suspicious || 0),
+    harmless: Number(stats.harmless || 0), undetected: Number(stats.undetected || 0),
+    retrievedAt: new Date().toISOString(),
+    permalink: `https://www.virustotal.com/gui/file/${sha256}`
+  };
+});
