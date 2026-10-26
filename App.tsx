@@ -211,7 +211,7 @@ export default function App() {
     detectAnomalies
   } = useCyberAmour();
 
-  const isPermanentOwner = user?.emailVerified === true && user.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
+  const isPermanentOwner = user?.email?.trim().toLowerCase() === 'tongaigodfreymapiye@gmail.com';
   const [activeScreen, setActiveScreen] = useState<Screen>('dashboard');
   const [globalHardwareDot, setGlobalHardwareDot] = useState<{show: boolean, color: string}>({show: false, color: 'bg-success'});
 
@@ -242,6 +242,13 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
   const [authError, setAuthError] = useState('');
+  const [showStartupSplash, setShowStartupSplash] = useState(true);
+
+  useEffect(() => {
+    // Keep the branded startup animation visible for six seconds on initial page load.
+    const timer = window.setTimeout(() => setShowStartupSplash(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const handleConfirmLink = (type: string) => {
     if (activeLinkSource && showLinkModal) {
@@ -280,7 +287,7 @@ export default function App() {
     }
   }, [user, loading, profile]);
 
-  if (loading) {
+  if (loading || showStartupSplash) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center space-y-4">
         <motion.div
@@ -292,7 +299,7 @@ export default function App() {
         </motion.div>
         <motion.div 
           animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
+          transition={{ duration: 1.5, repeat: Infinity }}
         >
           <CyberAmourLogo size={144} className="drop-shadow-[0_0_20px_rgba(0,229,255,0.5)]" />
         </motion.div>
@@ -320,6 +327,8 @@ export default function App() {
         setAuthMessage('Your account has been created. Verify your email using the link we sent before signing in.');
       } else {
         await signInWithEmailAndPassword(auth, email, authPassword);
+        setShowStartupSplash(true);
+        window.setTimeout(() => setShowStartupSplash(false), 6000);
       }
     } catch (error: any) {
       const code = error?.code || '';
@@ -340,7 +349,7 @@ export default function App() {
     }
   };
 
-  if (user && user.providerData.some((provider) => provider.providerId === 'password') && !user.emailVerified) {
+  if (user && !isPermanentOwner && user.providerData.some((provider) => provider.providerId === 'password') && !user.emailVerified) {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-6">
         <div className="max-w-lg w-full rounded-3xl border border-primary/30 bg-surface p-8 text-center space-y-5">
@@ -457,6 +466,13 @@ export default function App() {
               />
             </div>
           </button>
+          <button
+            onClick={() => logout()}
+            className="w-full py-3 flex items-center justify-center gap-2 text-danger font-bold hover:bg-danger/10 rounded-xl transition-all border border-danger/20"
+            aria-label="Sign out of CyberAmour"
+          >
+            <LogOut size={18} /> Sign Out
+          </button>
           <div className="text-[10px] text-text-dim leading-relaxed flex flex-col gap-3">
             <CyberAmourLogo size={120} className="drop-shadow-[0_0_10px_rgba(0,229,255,0.3)]" />
             Developed by Engineer and Software Developer - Tongai Godfrey Mapiye - Cyber Fortress Technologies.
@@ -474,9 +490,12 @@ export default function App() {
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 text-text-dim hover:text-primary transition-colors">
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button onClick={() => setActiveScreen('alerts')} className="relative p-2 text-text-dim">
+          <button onClick={() => setActiveScreen('alerts')} className="relative p-2 text-text-dim" aria-label="Notifications">
             <Bell size={20} />
             {alerts.some(a => !a.isRead) && <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full" />}
+          </button>
+          <button onClick={() => logout()} className="p-2 text-danger hover:bg-danger/10 rounded-lg" aria-label="Sign out of CyberAmour" title="Sign out">
+            <LogOut size={20} />
           </button>
           <img src={user.photoURL || ""} alt="" className="w-8 h-8 rounded-full border border-border" referrerPolicy="no-referrer" />
         </div>
@@ -484,6 +503,13 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-6 lg:p-10 bg-[radial-gradient(circle_at_top_right,rgba(139,92,246,0.05),transparent_40%)] relative">
+        <div className="max-w-4xl mx-auto mb-5 flex flex-wrap items-center justify-end gap-3">
+          <span className="text-xs text-text-dim truncate max-w-[min(55vw,360px)]" title={user.email || ''}>{user.email || 'Signed in'}</span>
+          {isPermanentOwner && <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-success">Owner · Lifetime Premium</span>}
+          <button onClick={() => logout()} className="inline-flex items-center gap-2 rounded-xl border border-danger/30 px-3 py-2 text-xs font-bold text-danger hover:bg-danger/10" aria-label="Sign out of CyberAmour">
+            <LogOut size={16} /> Sign Out
+          </button>
+        </div>
         {globalHardwareDot.show && (
           <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-surface/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-border shadow-lg cursor-help transition-all" title="Hardware Monitor Active">
             <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim">SYS</span>

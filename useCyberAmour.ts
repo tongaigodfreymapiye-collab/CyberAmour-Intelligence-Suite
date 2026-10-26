@@ -176,7 +176,7 @@ export function useCyberAmour() {
     const unsubProfile = onSnapshot(userRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        // Owner entitlement is derived from verified Firebase identity, never from editable profile fields.
+        // Owner entitlement is derived from the authenticated Firebase account email, never from editable profile fields.
         setProfile(isPermanentOwner(user) ? {
           ...data, isOwner: true, isPremium: true, isBusiness: true,
           subscriptionTier: 'business', subscriptionStatus: 'owner_lifetime', subscriptionExpiresAt: null,
