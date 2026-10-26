@@ -175,7 +175,8 @@ export default function App() {
     activityLogs,
     scoreHistory,
     weather,
-    loading, 
+    loading,
+    profileLoadError,
     is2FAVerified,
     fetchThreatIntelSummary,
     fetchDeviceIntelSummary,
@@ -296,7 +297,7 @@ export default function App() {
           animate={{ opacity: 1 }}
           className="font-bold text-danger text-lg tracking-widest uppercase"
         >
-          Protected by CyberAmour
+          Protected by Cyber Fortress Technologies
         </motion.div>
         <motion.div 
           animate={{ scale: [1, 1.2, 1] }}
@@ -304,6 +305,21 @@ export default function App() {
         >
           <CyberAmourLogo size={144} className="drop-shadow-[0_0_20px_rgba(0,229,255,0.5)]" />
         </motion.div>
+      </div>
+    );
+  }
+
+  if (user && profileLoadError && !loading && !showStartupSplash) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+        <div className="max-w-xl w-full rounded-3xl border border-danger/30 bg-surface p-8 text-center space-y-5">
+          <CyberAmourLogo size={120} className="mx-auto" />
+          <h1 className="text-2xl font-bold">You are signed in, but your profile did not load</h1>
+          <p className="text-text-dim">{profileLoadError}</p>
+          <p className="text-sm text-text-dim">No subscription or security status has been inferred from this error. Retry after checking the network and Firebase configuration.</p>
+          <button type="button" onClick={() => window.location.reload()} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white">Retry profile loading</button>
+          <button type="button" onClick={logout} className="w-full rounded-xl border border-border px-4 py-3">Sign out</button>
+        </div>
       </div>
     );
   }
@@ -374,7 +390,7 @@ export default function App() {
           <div className="space-y-3">
             <h1 className="text-4xl font-extrabold tracking-tight logo-gradient">CyberAmour</h1>
             <p className="text-text-dim uppercase tracking-wider text-sm">Digital intelligence, protected.</p>
-            <div className="font-bold text-danger text-lg tracking-widest uppercase">Protected by CyberAmour</div>
+            <div className="font-bold text-danger text-lg tracking-widest uppercase">Protected by Cyber Fortress Technologies</div>
           </div>
           <div className="flex justify-center"><div className="p-4 bg-primary/20 rounded-3xl border border-primary/30"><CyberAmourLogo size={160} className="shadow-[0_0_20px_rgba(0,229,255,0.5)]" /></div></div>
           <div className="rounded-2xl border border-border bg-surface/70 p-5 text-left space-y-4">
@@ -394,7 +410,26 @@ export default function App() {
             {authMode !== 'reset' && <button type="button" className="w-full text-sm text-primary underline" onClick={() => { setAuthMode('reset'); setAuthError(''); setAuthMessage(''); }}>Forgot password?</button>}
             {authMode === 'reset' && <button type="button" className="w-full text-sm text-primary underline" onClick={() => { setAuthMode('signin'); setAuthError(''); setAuthMessage(''); }}>Back to sign in</button>}
             <div className="flex items-center gap-3 text-xs text-text-dim"><span className="h-px flex-1 bg-border" />OR<span className="h-px flex-1 bg-border" /></div>
-            <button onClick={login} className="w-full py-3 px-4 bg-surface border border-primary/30 hover:bg-primary/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3"><UserIcon size={20} />Continue with Google</button>
+            <button type="button" disabled={authBusy} onClick={async () => {
+              setAuthError('');
+              setAuthMessage('');
+              setAuthBusy(true);
+              try {
+                await login();
+              } catch (error: any) {
+                const code = error?.code || '';
+                const friendly: Record<string, string> = {
+                  'auth/unauthorized-domain': 'Firebase is not allowing sign-in from this website. In Firebase Console → Authentication → Settings → Authorized domains, add tongaigodfreymapiye-collab.github.io.',
+                  'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups for this website and try again.',
+                  'auth/popup-closed-by-user': 'The Google sign-in window was closed before sign-in finished. Try again and complete the Google prompt.',
+                  'auth/cancelled-popup-request': 'A sign-in window is already opening. Finish that window or wait a moment before retrying.',
+                  'auth/network-request-failed': 'A network request failed during Google sign-in. Check your connection and try again.'
+                };
+                setAuthError(friendly[code] || error?.message || 'Google sign-in failed. Please try again.');
+              } finally {
+                setAuthBusy(false);
+              }
+            }} className="w-full py-3 px-4 bg-surface border border-primary/30 hover:bg-primary/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 disabled:opacity-60"><UserIcon size={20} />{authBusy ? 'Connecting to Google…' : 'Continue with Google'}</button>
             <button onClick={() => setShowDownloadQR(true)} className="w-full py-3 px-4 bg-surface border border-border text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3"><QrCode size={20} />Scan to Download App</button>
           </div>
           {showDownloadQR && <DownloadQRModal onClose={() => setShowDownloadQR(false)} />}
@@ -2173,7 +2208,8 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         await rewardUserWithScan(type);
       }
     } catch (e) {
-       console.error("Ad failed to load/play", e);
+       console.error("Rewarded-ad integration unavailable", e);
+       window.alert('Rewarded ads are not configured in this web build. No scan credit was added.');
     } finally {
       setIsAdLoading(false);
     }
@@ -3617,7 +3653,7 @@ function AIAssistant({ askAI, logActivity, profile, setActiveScreen, alerts, act
         )}
         {isLimitReached && (
           <div className="p-3 bg-accent/10 border border-accent/20 rounded-xl text-[10px] text-accent font-bold text-center">
-            Free tier limit reached (5 messages). Upgrade for unlimited AI assistance.
+            Free tier limit reached (5 messages). Premium AI access is subject to configured usage limits.
           </div>
         )}
         <div className="flex gap-2">
@@ -4051,7 +4087,7 @@ function KeyFeatures({ setActiveScreen, isPermanentOwner }: any) {
   const premiumFeatures = [
     { name: 'Comprehensive Global Identity Search', desc: 'Deep AI-driven forensics into personas', icon: <UserSearch size={24} className="text-[#00E5FF]" /> },
     { name: 'Dark Web Exposure Checks', desc: 'Run supported exposure checks when configured; results are not continuous surveillance', icon: <Ghost size={24} className="text-[#8B5CF6]" /> },
-    { name: 'AI Security Assistant (Unlimited)', desc: 'Advanced conversational AI & deep analysis', icon: <MessageSquare size={24} className="text-accent" /> },
+    { name: 'AI Security Assistant', desc: 'Advanced conversational AI; usage limits apply', icon: <MessageSquare size={24} className="text-accent" /> },
     { name: 'Pre-Report Interactive Feedback', desc: 'Refine raw scan findings interactively', icon: <Settings size={24} className="text-success" /> },
     { name: 'Antivirus & File Reputation', desc: 'Local SHA-256 fingerprinting and live reputation lookup when configured; not full-device antivirus', icon: <ShieldCheck size={24} className="text-success" /> },
     { name: 'Export Diagnostics', desc: 'PDF/CSV export of advanced hardware stats', icon: <Download size={24} className="text-danger" /> }
@@ -4349,7 +4385,6 @@ function SettingsScreen({ profile, logout, updateUserPreferences, changePassword
   const [twoFactorData, setTwoFactorData] = useState<any>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
-  const [isVpnEnabled, setIsVpnEnabled] = useState(false);
   const [passwordToTest, setPasswordToTest] = useState('');
 
   const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -4457,34 +4492,15 @@ function SettingsScreen({ profile, logout, updateUserPreferences, changePassword
             </span>
           </div>
 
-          <div 
-            onClick={() => {
-              if (profile?.isPremium) {
-                setIsVpnEnabled(!isVpnEnabled);
-              } else {
-                setActiveScreen('pricing');
-              }
-            }}
-            className="flex items-center justify-between p-4 hover:bg-surface/30 rounded-2xl transition-all cursor-pointer group border border-transparent hover:border-border"
-          >
-            <div className="flex items-center gap-3 text-text-dim group-hover:text-text-main">
-              <Globe size={18} className={isVpnEnabled ? "text-primary" : ""} />
-              <span className="text-sm font-medium">Secure VPN Connection</span>
-              {!profile?.isPremium && (
-                <span className="text-[8px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded ml-2 uppercase tracking-widest">Premium</span>
-              )}
+          <div className="flex items-center justify-between p-4 rounded-2xl border border-border bg-surface/20" aria-label="VPN integration status">
+            <div className="flex items-center gap-3 text-text-dim">
+              <Globe size={18} />
+              <div>
+                <span className="block text-sm font-medium">VPN connection</span>
+                <span className="block text-xs text-amber-200">No VPN client connected</span>
+              </div>
             </div>
-            <div className={cn(
-              "w-10 h-5 rounded-full relative transition-colors shadow-inner flex-shrink-0",
-              isVpnEnabled ? "bg-primary" : "bg-text-dim/30"
-            )}>
-              <div 
-                className={cn(
-                  "absolute top-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300",
-                  isVpnEnabled ? "translate-x-[20px]" : "translate-x-[2px]"
-                )}
-              />
-            </div>
+            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-100">Not connected</span>
           </div>
 
           <div 
@@ -5439,6 +5455,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
   const [currentPhases, setCurrentPhases] = useState<string[]>([]);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [scanResult, setScanResult] = useState<any>(null);
+  const [scanError, setScanError] = useState('');
   const [selectedScan, setSelectedScan] = useState<any>(null);
   const [selectedExposure, setSelectedExposure] = useState<any>(null);
   const isPremium = profile?.isPremium;
@@ -5446,6 +5463,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
   const handleScan = async () => {
     import('./utils/sounds').then(s => s.playScanSound());
     setIsScanning(true);
+    setScanError('');
     setScanProgress(0);
 
     const phases = ["Submitting authorized account identifier...", "Searching indexed public breach notifications...", "Verifying source references...", "Preparing evidence-based summary..."];
@@ -5465,8 +5483,10 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
       } else {
         import('./utils/sounds').then(s => s.playSuccessSound());
       }
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Public breach intelligence search failed', error);
+      setScanError(error?.message || 'The public-source search failed. No conclusion about exposure can be drawn.');
+      setScanResult(null);
       import('./utils/sounds').then(s => s.playErrorSound());
     } finally {
       setTimeout(() => setIsScanning(false), 500);
@@ -5517,7 +5537,7 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
       <div className="flex flex-col md:flex-row justify-between gap-4">
         <div className="glass-card flex-1 p-6 flex items-center justify-between border-danger/30 bg-danger/5">
           <div>
-            <p className="text-sm text-text-dim uppercase tracking-widest font-bold">Active Exposures</p>
+            <p className="text-sm text-text-dim uppercase tracking-widest font-bold">Recorded Findings</p>
             <h3 className="text-4xl font-black text-danger mt-1">{darkWebBreaches.length}</h3>
           </div>
           <AlertTriangle className="text-danger opacity-50" size={48} />
@@ -5534,6 +5554,8 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
           </button>
         </div>
       </div>
+
+      {scanError && <div role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{scanError}</div>}
 
       {isScanning && (
             <div className="w-full flex-col items-center mt-4 p-4 bg-surface/50 border border-border rounded-xl">
@@ -5610,17 +5632,17 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
         <div className="glass-card p-6 space-y-2">
           <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Exposures Found</div>
           <div className="text-4xl font-black text-danger">{darkWebBreaches.length}</div>
-          <p className="text-[10px] text-text-dim">Across configured public sources</p>
+          <p className="text-[10px] text-text-dim">Source-backed records saved from prior searches</p>
         </div>
         <div className="glass-card p-6 space-y-2">
           <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Monitored Email</div>
           <div className="text-xl font-bold truncate">{profile?.email}</div>
-          <p className="text-[10px] text-success font-bold uppercase tracking-widest">✓ Active Monitoring</p>
+          <p className="text-[10px] text-amber-200 font-bold uppercase tracking-widest">On-demand only · no background monitoring</p>
         </div>
         <div className="glass-card p-6 space-y-2">
           <div className="text-text-dim text-xs font-bold uppercase tracking-widest">Last Scan</div>
           <div className="text-xl font-bold">{darkWebScans.length > 0 ? new Date(darkWebScans[0].createdAt).toLocaleDateString() : 'Never'}</div>
-          <p className="text-[10px] text-text-dim">Frequency: Real-time</p>
+          <p className="text-[10px] text-text-dim">Search frequency: user-initiated</p>
         </div>
       </div>
 
@@ -5634,10 +5656,10 @@ function DarkWebMonitor({ profile, breaches, scans, scanDarkWeb, setActiveScreen
           <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide">
             {darkWebBreaches.length === 0 ? (
               <div className="glass-card p-12 text-center space-y-4">
-                <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle2 size={32} className="text-success" />
+                <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto">
+                  <AlertCircle size={32} className="text-text-dim" />
                 </div>
-                <p className="text-text-dim italic text-sm">No source-backed exposure findings were returned. This does not prove that the account has never been exposed.</p>
+                <p className="text-text-dim italic text-sm">No source-backed findings are currently saved. This may mean no findings were returned, no successful search has completed, or the provider was unavailable. It is not evidence that the account is safe.</p>
               </div>
             ) : (
               darkWebBreaches.map((b: any, idx: number) => (
@@ -6052,7 +6074,7 @@ function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }
         'Security Score (Ad-supported)',
         'Limited Alerts (Last 3)',
         'Community Support',
-        '3 Public Breach Intelligence Checks / Month'
+        'Limited on-demand public-source checks; usage limits apply'
       ],
       button: 'Current Plan',
       productId: null
@@ -6062,13 +6084,13 @@ function PricingScreen({ profile, upgrade, startCheckout, redeemActivationCode }
       name: 'Premium',
       priceMonthly: 9.99,
       priceYearly: 89.99,
-      description: 'Ad-free unlimited protection for individuals.',
+      description: 'Ad-free access to configured CyberAmour tools. This web app is not a continuously running antivirus or VPN.',
       features: [
         'No Advertisements (AdMob Disabled)',
-        'Unlimited Cyber Forensics Scans',
-        'Automated Public Breach Intelligenceing',
-        'Background Threat Network Checks',
-        'Dedicated AI Advisor',
+        'Access to configured forensic and OSINT tools',
+        'On-demand public-source breach intelligence searches',
+        'AI assistant when server-side AI is configured',
+        'No background endpoint or network monitoring unless a sensor is installed and connected',
       ],
       button: 'Upgrade to Sub',
       highlight: true,

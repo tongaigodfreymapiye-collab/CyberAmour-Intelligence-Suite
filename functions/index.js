@@ -327,6 +327,233 @@ exports.analyzeCyberIntel = onCall({
   };
 });
 
+// Evidence-led public-records / adverse-media investigation. This deliberately excludes
+// intimate material, private relationship information, private addresses and moral-character scoring.
+exports.investigatePublicRecords = onCall({ secrets: [geminiApiKey], timeoutSeconds: 90, memory: '512MiB' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to run a public-records investigation.');
+  const premium = await hasServerVerifiedPremium(request.auth.uid, request.auth.token.email);
+  if (!premium) throw new HttpsError('permission-denied', 'Public-records investigation is available to verified Premium / Forensics accounts.');
+  await enforceUserRateLimit(request.auth.uid, 'public-records-investigation-minute', 2, 60 * 1000);
+  await enforceUserRateLimit(request.auth.uid, 'public-records-investigation-day', 30, 24 * 60 * 60 * 1000);
+
+  const data = request.data || {};
+  const entityName = String(data.entityName || '').trim();
+  const entityType = String(data.entityType || 'Individual').trim();
+  const jurisdiction = String(data.jurisdiction || '').trim();
+  const context = String(data.disambiguatingContext || '').trim();
+  const purpose = String(data.purpose || '').trim();
+  const includePublicSocial = data.includePublicSocial !== false;
+  const includePublicImageAbuseReporting = data.includePublicImageAbuseReporting === true;
+  const includePublicMaritalStatus = data.includePublicMaritalStatus === true;
+  const includeIntegrityConduct = data.includeIntegrityConduct !== false;
+  const authorizationConfirmed = data.authorizationConfirmed === true;
+  const requestedCategories = [
+    'Official court and regulatory records',
+    'Fraud, financial misconduct, embezzlement and corporate/procurement risk reporting',
+    ...(includeIntegrityConduct ? ['Documented integrity / conduct evidence (evidence-led; not a moral-character score)'] : []),
+    ...(includePublicImageAbuseReporting ? ['Public reporting and official proceedings concerning non-consensual intimate-image publication (reporting/context only; no imagery)'] : []),
+    ...(includePublicMaritalStatus ? ['Publicly disclosed marital-status facts (context only; only if relevant to the stated purpose)'] : []),
+    ...(includePublicSocial ? ['Relevant public social posts (leads only, not proof)'] : [])
+  ];
+  if (entityName.length < 2 || entityName.length > 180) throw new HttpsError('invalid-argument', 'Enter an entity name between 2 and 180 characters.');
+  if (!['Individual', 'Company / organisation'].includes(entityType)) throw new HttpsError('invalid-argument', 'Choose an Individual or Company / organisation.');
+  if (jurisdiction.length > 100 || context.length > 700 || purpose.length > 700) throw new HttpsError('invalid-argument', 'Jurisdiction, context or purpose is too long.');
+  if (purpose.length < 10) throw new HttpsError('invalid-argument', 'Enter a specific lawful investigation purpose.');
+  if (!authorizationConfirmed) throw new HttpsError('failed-precondition', 'Confirm that you have a lawful purpose and authority to conduct this check.');
+  const directMediaRequestPattern = /(?:\b(?:download|view|watch|mirror|archive|collect|reproduce|upload|share|show\s+me)\b.{0,120}\b(?:actual\s+)?(?:leaked?\s+nudes?|sex\s*tapes?|nude\s+(?:photos?|images?|videos?)|intimate\s+(?:images?|photos?|videos?)|non[- ]consensual\s+intimate\s+(?:images?|photos?|videos?))\b|\b(?:direct\s+(?:link|url)|actual\s+(?:image|video|photo|file|media)|full\s+(?:video|tape|image)|original\s+file)\b.{0,100}\b(?:leaked?\s+nudes?|sex\s*tapes?|nude\s+(?:photos?|images?|videos?)|intimate\s+(?:images?|photos?|videos?))\b)/i;
+  if (directMediaRequestPattern.test(`${purpose} ${context}`)) {
+    throw new HttpsError('invalid-argument', 'This feature searches public reporting and legal proceedings only. It cannot locate, link to, download or reproduce intimate media. Select the public reporting / court-record option instead.');
+  }
+  const key = (() => { try { return geminiApiKey.value(); } catch (_) { return ''; } })();
+  if (!key) throw new HttpsError('failed-precondition', 'AI search is not configured. Set the GEMINI_API_KEY Firebase secret and deploy Functions.');
+
+  const scopeText = includePublicSocial
+    ? 'Search reputable news publishers, publicly accessible official court and regulator records, official corporate/procurement registers, official sanctions/enforcement notices, and public social-media posts only where directly relevant to the stated lawful issue. Social posts are leads, not proof.'
+    : 'Search reputable news publishers, publicly accessible official court and regulator records, official corporate/procurement registers and official sanctions/enforcement notices. Do not rely on social-media-post evidence.';
+  const imageAbuseScope = includePublicImageAbuseReporting
+    ? 'INCLUDE: Public-interest reporting and official proceedings about alleged or adjudicated non-consensual publication of intimate images, image-based sexual abuse, and related takedown/criminal/civil proceedings. Use reputable news reports, official court decisions, regulators or official statements only for this topic. Search the reporting/case, NOT the images. Never visit, link to, describe, reproduce, download, mirror or return image/video files, thumbnails, pornographic or leak-distribution pages. State the person’s reported role (e.g. complainant/victim, accused publisher, defendant, witness, or unclear). Being a victim/complainant or having images circulated is not adverse conduct and must never increase the subject risk.'
+    : 'EXCLUDE: Do not search for this subject area.';
+  const maritalScope = includePublicMaritalStatus
+    ? 'INCLUDE LIMITED CONTEXT: Factual marital-status information only when the subject voluntarily disclosed it publicly, it is in a reputable public-interest report, or it is directly stated in an official public proceeding AND it is materially relevant to the stated purpose. Do not gather intimate relationship details, sexual history, accusations about fidelity, family details, or information about spouses/children beyond the minimum needed. Label as context only; it must not by itself increase risk.'
+    : 'EXCLUDE: Do not research or report marital-status or relationship-history information.';
+  const integrityScope = includeIntegrityConduct
+    ? 'INCLUDE documented integrity/conduct matters relevant to the stated purpose, such as fraud, embezzlement, bribery, deception in business, abuse of fiduciary duty or office, financial misconduct, theft, official sanctions, judgments and regulator findings. Report allegations separately from findings and outcomes; do not make a broad moral-character, fidelity, honesty/personality or “good/bad person” score.'
+    : 'EXCLUDE broad integrity/conduct screening beyond official court and regulator records relevant to the stated purpose.';
+  const prompt = `You are a careful public-source forensic and due-diligence research analyst. Produce a NON-EXHAUSTIVE, evidence-led report based only on sources actually surfaced by Google Search grounding. Subject: ${entityName}. Entity type: ${entityType}. Jurisdiction focus: ${jurisdiction || 'not specified'}. Disambiguating context supplied by investigator: ${context || 'none supplied'}. Stated lawful purpose: ${purpose}. Requested categories: ${requestedCategories.join('; ')}.\n\nRESEARCH SCOPE: ${scopeText} ${integrityScope} ${imageAbuseScope} ${maritalScope} Prioritise first-party court judgments/dockets, regulator or law-enforcement notices, official company/procurement records, sanctions/enforcement lists, official insolvency records and reputable independent news. Public social posts are leads, not proof. Search multiple distinct terms and jurisdictions when relevant; show categories searched and data gaps. Do not claim the entire internet or private databases were searched.\n\nEVIDENCE RULES: Never infer identity from a name alone. State entity-match confidence and non-sensitive reasons. Each finding must link to a direct HTML source returned in grounding references—not a direct photo/video/file URL. Prefer two independent sources for high-impact claims, including official records when available. Same-name uncorroborated matches are low-confidence leads, never facts. Record event/publication dates separately. Distinguish allegation, investigation, arrest, charge, pending case, civil claim, judgment, conviction, acquittal, dismissal, appeal and regulator action. A charge or allegation is not a conviction. Include outcome and credible counter-evidence. For each finding add subjectRole to explain whether subject is alleged actor, adjudicated actor, complainant/victim, witness, related entity, or unclear. Do not imply wrongdoing by a complainant/victim. Keep publicly disclosed marital-status facts in the exact category “Publicly disclosed marital status (context only)” and never use them as an adverse indicator. Use exact category “Public reporting on intimate-image abuse / related proceedings” only for legal/news coverage and never link to the media itself. Integrity categories must be conduct-specific and purpose-relevant, not generic morality judgments. For a company, mention officers only when needed to explain a relevant official filing/proceeding.\n\nPRIVACY AND FAIRNESS: Never return intimate image/video files, thumbnails, direct media URLs, leak/porn distribution URLs, explicit descriptions, private addresses, personal phone/email, private social accounts, sexual-life details, children’s details, or non-relevant family details. For intimate-image incidents, cover public reporting and legal outcomes only. A victim or complainant status is not negative evidence. Only disclose marital status where the option is enabled and the limited public-source conditions above are met. Do not assign a morality score, general character/personality rating, or employment/credit/insurance/housing/eligibility recommendation. A lack of records is not proof no records exist.\n\nRETURN JSON ONLY: {"summary":"...","riskAssessment":{"level":"High|Moderate|Low|Insufficient evidence","rationale":"only risk relevance to the stated purpose based on source quality, documented conduct and outcome; no character score"},"findings":[{"category":"Court / legal proceeding|Regulatory / sanctions|Fraud or financial-misconduct reporting|Corporate / procurement record|Documented integrity / conduct evidence|Public reporting on intimate-image abuse / related proceedings|Publicly disclosed marital status (context only)|Relevant public statement|Cybersecurity exposure|Other relevant public record","subjectRole":"Accused actor|Adjudicated actor|Complainant / victim|Witness|Related entity|Unclear","headline":"...","summary":"source-supported and non-graphic synopsis","status":"Allegation|Investigation|Charge|Pending case|Civil claim|Judgment|Conviction|Acquittal|Dismissed|Appeal|Regulatory action|Official statement|Publicly disclosed fact|Unverified public claim|Other / unclear","eventDate":"YYYY-MM-DD or unknown","publishedDate":"YYYY-MM-DD or unknown","sourceType":"Official court|Regulator|Official register|Reputable news|Official statement|Public social post|Other public source","sourceUrl":"exact direct HTML URL from grounding references","sourceName":"...","identityMatchConfidence":"High|Medium|Low","matchRationale":"...","evidenceStrength":"Primary official record|Multiple independent reports|Single reputable report|Public claim not independently corroborated","relevanceToPurpose":"...","counterEvidenceOrStatus":"...","recommendedVerification":"..."}],"coverage":{"categoriesSearched":["..."],"queriesUsed":["..."],"dataGaps":["..."],"notSearched":["Private databases and other inaccessible sources"]},"limitations":["..."],"suggestedNextSteps":["..."]}. Never invent sources, quotes, case numbers, dates or findings. Empty findings are appropriate if no source-linked material is found. If evidence is insufficient, risk level MUST be Insufficient evidence. Uncorroborated social posts are claims, not established facts. If findings are about victimisation/marital-status context only, risk level MUST be Insufficient evidence.`;
+
+  let json;
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(75000),
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 } })
+    });
+    if (!response.ok) {
+      const status = response.status;
+      throw new HttpsError(status === 429 ? 'resource-exhausted' : 'unavailable', `Public-source research provider returned HTTP ${status}.`);
+    }
+    json = await response.json();
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error('Public records research request failed', err && err.message);
+    throw new HttpsError('unavailable', 'Public-source research could not be completed. No investigation result was generated.');
+  }
+
+  const candidate = json.candidates && json.candidates[0] || {};
+  const responseText = (candidate.content && candidate.content.parts || []).map(part => part.text || '').join('').trim();
+  const grounding = candidate.groundingMetadata || {};
+  const isDirectMediaUrl = (value) => {
+    try {
+      const parsed = new URL(String(value));
+      if (!/^https?:$/i.test(parsed.protocol)) return true;
+      return /\.(?:jpe?g|png|gif|webp|bmp|svg|mp4|m4v|mov|avi|webm|mkv|m3u8|mpd|ts|mpeg|mpg)(?:$)/i.test(parsed.pathname);
+    } catch (_) { return true; }
+  };
+  const groundedSources = (grounding.groundingChunks || []).map(chunk => chunk.web).filter(web => web && /^https?:\/\//i.test(web.uri || '') && !isDirectMediaUrl(web.uri)).map(web => ({ title: String(web.title || web.uri).slice(0, 240), url: web.uri }));
+  const uniqueSources = groundedSources.filter((src, i, all) => all.findIndex(other => other.url === src.url) === i);
+  const canonicalUrl = (value) => { try { const u = new URL(String(value)); return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/$/, '')}`; } catch (_) { return ''; } };
+  let report;
+  try { report = JSON.parse(responseText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()); }
+  catch (_) { report = { summary: responseText || 'The research provider returned no readable summary.', riskAssessment: { level: 'Insufficient evidence', rationale: 'Structured results were unavailable.' }, findings: [], coverage: { categoriesSearched: [], queriesUsed: [], dataGaps: ['AI output was not valid JSON.'], notSearched: ['Private databases'] }, limitations: ['Results could not be parsed into a validated evidence register. Review sources manually.'], suggestedNextSteps: ['Retry later or use direct official source searches.'] }; }
+
+  const privateDataPattern = /(?:private\s+address|home\s+address|personal\s+phone(?:\s+number)?|private\s+(?:email|social\s+account)|personal\s+email|bank\s+account|national\s+id\s+number|passport\s+number)/i;
+  const isContextOnlyCategory = (finding) => /publicly disclosed marital status/i.test(String(finding.category || ''));
+  const maritalContextPattern = /\b(?:marital status|married|marriage|marital|divorc(?:e|ed|ing)|spouse|wife|husband|ex-wife|ex-husband|widow|widower)\b/i;
+  const isImageAbuseCoverage = (finding) => /intimate-image abuse|non-consensual intimate|image-based sexual abuse/i.test(`${finding.category || ''} ${finding.headline || ''} ${finding.summary || ''}`);
+  const safeFindings = (Array.isArray(report.findings) ? report.findings : []).slice(0, 50).filter((finding) => {
+    const url = finding && (finding.sourceUrl || finding.url || (Array.isArray(finding.sources) && finding.sources[0] && finding.sources[0].url));
+    const grounded = canonicalUrl(url);
+    if (!grounded || !uniqueSources.some(src => canonicalUrl(src.url) === grounded) || isDirectMediaUrl(url)) return false;
+    const serialized = JSON.stringify(finding);
+    if (privateDataPattern.test(serialized)) return false;
+    if ((isContextOnlyCategory(finding) || maritalContextPattern.test(serialized)) && !includePublicMaritalStatus) return false;
+    if (isImageAbuseCoverage(finding)) {
+      if (!includePublicImageAbuseReporting) return false;
+      if (!['Official court', 'Regulator', 'Reputable news', 'Official statement'].includes(String(finding.sourceType || ''))) return false;
+    }
+    if (/Documented integrity\s*\/\s*conduct evidence/i.test(String(finding.category || '')) && !includeIntegrityConduct) return false;
+    return true;
+  }).map((finding) => {
+    const rawUrl = finding.sourceUrl || finding.url || (Array.isArray(finding.sources) && finding.sources[0] && finding.sources[0].url);
+    const source = uniqueSources.find(src => canonicalUrl(src.url) === canonicalUrl(rawUrl));
+    const allowedStatuses = ['Allegation','Investigation','Charge','Pending case','Civil claim','Judgment','Conviction','Acquittal','Dismissed','Appeal','Regulatory action','Official statement','Publicly disclosed fact','Unverified public claim','Other / unclear'];
+    return {
+      category: String(finding.category || 'Other relevant public record').slice(0, 100),
+      subjectRole: String(finding.subjectRole || 'Unclear').slice(0, 60),
+      headline: String(finding.headline || source.title).slice(0, 240),
+      summary: String(finding.summary || '').slice(0, 3000),
+      status: allowedStatuses.includes(finding.status) ? finding.status : 'Other / unclear',
+      eventDate: String(finding.eventDate || 'Unknown').slice(0, 40),
+      publishedDate: String(finding.publishedDate || 'Unknown').slice(0, 40),
+      sourceType: String(finding.sourceType || 'Other public source').slice(0, 100),
+      sourceUrl: source.url,
+      sourceName: String(finding.sourceName || source.title).slice(0, 240),
+      identityMatchConfidence: ['High','Medium','Low'].includes(finding.identityMatchConfidence) ? finding.identityMatchConfidence : 'Low',
+      matchRationale: String(finding.matchRationale || 'Identity match requires analyst verification.').slice(0, 1200),
+      evidenceStrength: String(finding.evidenceStrength || 'Unverified lead').slice(0, 120),
+      relevanceToPurpose: String(finding.relevanceToPurpose || '').slice(0, 1000),
+      counterEvidenceOrStatus: String(finding.counterEvidenceOrStatus || 'No outcome/status established from the returned material.').slice(0, 1200),
+      recommendedVerification: String(finding.recommendedVerification || 'Open the source and check the original record/outcome.').slice(0, 1200)
+    };
+  });
+  let risk = report.riskAssessment && typeof report.riskAssessment === 'object' ? report.riskAssessment : {};
+  const allowedRiskLevels = ['High','Moderate','Low','Insufficient evidence'];
+  const riskRelevantFindings = safeFindings.filter(f => !/publicly disclosed marital status/i.test(f.category) && !/complainant\s*\/\s*victim|victim|complainant/i.test(f.subjectRole) && (!/intimate-image abuse|non-consensual intimate|image-based sexual abuse/i.test(`${f.category} ${f.headline} ${f.summary}`) || /accused actor|adjudicated actor/i.test(f.subjectRole)));
+  if (!uniqueSources.length || !riskRelevantFindings.length) risk = { level: 'Insufficient evidence', rationale: 'No validated findings relevant to risk for the stated purpose were established. Public marital status and victim/complainant status are context only and are not adverse evidence.' };
+  else if (!allowedRiskLevels.includes(risk.level)) risk = { level: 'Insufficient evidence', rationale: 'The model did not return a supported risk band.' };
+  const textWithoutPrivateClaims = String(report.summary || responseText || 'No source-supported summary was available.').slice(0, 6000);
+  const safeSummary = privateDataPattern.test(textWithoutPrivateClaims) ? 'The generated summary was withheld because it appeared to contain private personal data. Review the source-linked public records manually.' : textWithoutPrivateClaims;
+  const coverageNotes = [
+    'This report includes public web results actually returned by the provider; it is not an exhaustive search.',
+    ...(includePublicImageAbuseReporting ? ['Intimate-image-abuse coverage is limited to non-graphic reporting and official legal/public-interest records. No image/video files, thumbnails, or direct media URLs are returned. A person identified as a victim/complainant is not treated as an adverse finding.'] : []),
+    ...(includePublicMaritalStatus ? ['Marital-status details are limited to factual, publicly disclosed or official record information where relevant; such facts are context only and do not increase risk.'] : []),
+    'No general morality, fidelity, personality or “good/bad person” score is generated. Documented conduct is evaluated only for relevance to the stated purpose, source quality and legal outcome.'
+  ];
+  return {
+    investigatedAt: new Date().toISOString(), entityName, entityType, jurisdiction: jurisdiction || 'Not specified',
+    purpose, requestedCategories, disambiguatingContext: context || 'Not supplied', summary: safeSummary,
+    riskAssessment: { level: risk.level, rationale: String(risk.rationale || '').slice(0, 3000) }, findings: safeFindings,
+    coverage: { categoriesSearched: Array.isArray(report.coverage && report.coverage.categoriesSearched) ? report.coverage.categoriesSearched.slice(0, 20).map(String) : [], queriesUsed: Array.isArray(grounding.webSearchQueries) ? grounding.webSearchQueries.slice(0, 20).map(String) : (Array.isArray(report.coverage && report.coverage.queriesUsed) ? report.coverage.queriesUsed.slice(0, 20).map(String) : []), dataGaps: Array.isArray(report.coverage && report.coverage.dataGaps) ? report.coverage.dataGaps.slice(0, 30).map(String) : [], notSearched: Array.isArray(report.coverage && report.coverage.notSearched) ? report.coverage.notSearched.slice(0, 20).map(String) : ['Private, non-indexed or inaccessible sources; the entire internet was not searched.'] },
+    limitations: [...(Array.isArray(report.limitations) ? report.limitations.slice(0, 20).map(String) : []), 'This is a non-exhaustive search of public web sources, not a background check or legal determination.', 'An allegation or charge is not proof of guilt. Check original case records and final outcomes.', ...coverageNotes, ...(!uniqueSources.length ? ['Google Search grounding returned no attributable source links.'] : [])],
+    suggestedNextSteps: Array.isArray(report.suggestedNextSteps) ? report.suggestedNextSteps.slice(0, 15).map(String) : [],
+    sources: uniqueSources.slice(0, 60), provider: 'Google Search grounding + Gemini 2.5 Flash', grounded: uniqueSources.length > 0,
+    webSearchQueries: Array.isArray(grounding.webSearchQueries) ? grounding.webSearchQueries.slice(0, 20) : []
+  };
+});
+
+// Public CVE candidate lookup for explicitly identified hardware/network products.
+// Results are candidates from NVD keyword search; the analyst must validate exact CPE/version applicability.
+exports.lookupPublicCVEs = onCall({ timeoutSeconds: 35, memory: '256MiB' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to search public vulnerability repositories.');
+  const premium = await hasServerVerifiedPremium(request.auth.uid, request.auth.token.email);
+  if (!premium) throw new HttpsError('permission-denied', 'Technical vulnerability lookup is available to verified Premium / Forensics accounts.');
+  await enforceUserRateLimit(request.auth.uid, 'public-cve-lookup-minute', 5, 60 * 1000);
+  await enforceUserRateLimit(request.auth.uid, 'public-cve-lookup-day', 100, 24 * 60 * 60 * 1000);
+  const data = request.data || {};
+  const vendor = String(data.vendor || '').trim();
+  const product = String(data.product || '').trim();
+  const version = String(data.version || '').trim();
+  const assetType = String(data.assetType || '').trim();
+  if (vendor.length < 1 || product.length < 2 || vendor.length > 120 || product.length > 160 || version.length > 100) throw new HttpsError('invalid-argument', 'Enter vendor and product names; version is optional.');
+  if (!['Hardware / endpoint', 'Network appliance / infrastructure'].includes(assetType)) throw new HttpsError('invalid-argument', 'Select Hardware / endpoint or Network appliance / infrastructure.');
+  const query = [vendor, product, version].filter(Boolean).join(' ').slice(0, 350);
+  const headers = { accept: 'application/json', 'user-agent': 'CyberAmour-Forensic-Research/1.0 (public-source CVE lookup)' };
+  const errors = [];
+  let nvdJson = null;
+  let kevJson = null;
+  const now = new Date().toISOString();
+  const nvdUrl = new URL('https://services.nvd.nist.gov/rest/json/cves/2.0');
+  nvdUrl.searchParams.set('keywordSearch', [vendor, product].filter(Boolean).join(' ').slice(0, 250));
+  nvdUrl.searchParams.set('resultsPerPage', '40');
+  try {
+    const resp = await fetch(nvdUrl, { headers, signal: AbortSignal.timeout(16000) });
+    if (!resp.ok) errors.push(`NVD API returned HTTP ${resp.status}.`);
+    else nvdJson = await resp.json();
+  } catch (_) { errors.push('NVD API request failed or timed out.'); }
+  try {
+    const resp = await fetch('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', { headers, signal: AbortSignal.timeout(16000) });
+    if (!resp.ok) errors.push(`CISA KEV feed returned HTTP ${resp.status}.`);
+    else kevJson = await resp.json();
+  } catch (_) { errors.push('CISA KEV feed request failed or timed out.'); }
+  const kevEntries = Array.isArray(kevJson && kevJson.vulnerabilities) ? kevJson.vulnerabilities : [];
+  const kevById = new Map(kevEntries.map(entry => [String(entry.cveID || '').toUpperCase(), entry]));
+  const vulnerabilities = Array.isArray(nvdJson && nvdJson.vulnerabilities) ? nvdJson.vulnerabilities : [];
+  const terms = [vendor, product].filter(Boolean).map(t => t.toLowerCase());
+  const items = vulnerabilities.map(item => {
+    const cve = item && item.cve || {};
+    const id = String(cve.id || '').toUpperCase();
+    const description = (cve.descriptions || []).find(d => d.lang === 'en')?.value || (cve.descriptions || [])[0]?.value || 'No English description supplied by NVD.';
+    const metrics = cve.metrics || {};
+    const metric = (metrics.cvssMetricV40 || metrics.cvssMetricV31 || metrics.cvssMetricV30 || metrics.cvssMetricV2 || [])[0];
+    const cvss = metric && metric.cvssData ? Number(metric.cvssData.baseScore) : null;
+    const severity = metric && metric.cvssData && metric.cvssData.baseSeverity || metric && metric.baseSeverity || (cvss === null ? 'Unknown' : cvss >= 9 ? 'CRITICAL' : cvss >= 7 ? 'HIGH' : cvss >= 4 ? 'MEDIUM' : 'LOW');
+    const cpeMatches = [];
+    for (const config of cve.configurations || []) for (const node of config.nodes || []) for (const match of node.cpeMatch || []) {
+      cpeMatches.push({ criteria: match.criteria || '', vulnerable: !!match.vulnerable, versionStartIncluding: match.versionStartIncluding || null, versionStartExcluding: match.versionStartExcluding || null, versionEndIncluding: match.versionEndIncluding || null, versionEndExcluding: match.versionEndExcluding || null });
+    }
+    const cpeText = cpeMatches.map(m => m.criteria).join(' ').toLowerCase();
+    const summaryText = `${description} ${cpeText}`.toLowerCase();
+    const keywordSignal = terms.every(term => summaryText.includes(term) || term.replace(/[^a-z0-9]/g, '') && summaryText.replace(/[^a-z0-9]/g, '').includes(term.replace(/[^a-z0-9]/g, '')));
+    const kev = kevById.get(id) || null;
+    return {
+      cveId: id, description: String(description).slice(0, 3000), published: cve.published || null, lastModified: cve.lastModified || null,
+      cvssScore: Number.isFinite(cvss) ? cvss : null, severity: String(severity).toUpperCase(),
+      cisaKev: !!kev, kevDetails: kev ? { dateAdded: kev.dateAdded || null, dueDate: kev.dueDate || null, requiredAction: kev.requiredAction || null, knownRansomwareCampaignUse: kev.knownRansomwareCampaignUse || null, vendorProject: kev.vendorProject || null, product: kev.product || null, vulnerabilityName: kev.vulnerabilityName || null } : null,
+      cpeMatches: cpeMatches.slice(0, 30), keywordSignal, matchStatus: 'Candidate only — exact product, hardware revision, firmware and version applicability require analyst validation.',
+      nvdUrl: `https://nvd.nist.gov/vuln/detail/${id}`, cisaKevUrl: kev ? 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog' : null
+    };
+  }).filter(item => item.cveId).sort((a, b) => Number(b.cisaKev) - Number(a.cisaKev) || (b.cvssScore || 0) - (a.cvssScore || 0)).slice(0, 40);
+  return {
+    assetType, vendor, product, version: version || 'Not specified', query,
+    queriedAt: now, nvdQueryUrl: nvdUrl.toString(), nvdTotalResults: Number(nvdJson && nvdJson.totalResults || 0),
+    nvdFetched: !!nvdJson, cisaKevFetched: !!kevJson, cisaKevCatalogVersion: kevJson && kevJson.catalogVersion || null,
+    cisaKevDateReleased: kevJson && kevJson.dateReleased || null,
+    findings: items, errors,
+    summary: !nvdJson && !kevJson ? 'No source was reachable; no vulnerability conclusion was made.' : items.length ? `${items.length} NVD candidate record(s) returned. ${items.filter(v => v.cisaKev).length} candidate(s) also appear in CISA KEV. Verify the exact affected product configuration before treating any item as applicable.` : 'No NVD candidate was returned for this keyword query. This is not proof that the asset has no vulnerabilities.',
+    limitations: ['NVD keyword search can return false positives and miss affected products. Review the CPE configuration and vendor advisory for the exact model, hardware revision, firmware and version.', 'A CISA KEV match means that CVE appears in the exploited-vulnerability catalog; it does not prove that this particular asset is vulnerable.', 'No network scan, endpoint scan or firmware inspection was performed by this lookup.', ...errors],
+    sources: [ ...(nvdJson ? [{ title: 'NIST National Vulnerability Database API', url: nvdUrl.toString() }] : []), ...(kevJson ? [{ title: 'CISA Known Exploited Vulnerabilities catalog', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog' }] : []) ]
+  };
+});
+
 // Server-side AI assistant. Never trust the browser for model credentials.
 exports.cyberAmourAssistant = onCall({ secrets: [geminiApiKey], timeoutSeconds: 45 }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to use the CyberAmour assistant.');
