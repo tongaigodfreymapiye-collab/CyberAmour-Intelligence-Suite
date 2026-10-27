@@ -151,8 +151,9 @@ import { WorldClock } from './components/WorldClock';
 import { DeviceHealthChart } from './components/DeviceHealthChart';
 import EnterpriseRiskWorkspace from './components/EnterpriseRiskWorkspace';
 import LocalSecuritySensor from './components/LocalSecuritySensor';
+import WindowsEndpointScan from './components/WindowsEndpointScan';
 
-type Screen = 'attack' | 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
+type Screen = 'endpoint' | 'attack' | 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
 
 export default function App() {
   // Add global click sound
@@ -466,6 +467,7 @@ export default function App() {
             <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC & Controls" />
             <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="Threat Intelligence & OSINT" />
             <SidebarItem active={activeScreen === 'attack'} onClick={() => setActiveScreen('attack')} icon={<Database size={18} />} label="ATT&CK + KEV Intelligence" />
+            <SidebarItem active={activeScreen === 'endpoint'} onClick={() => setActiveScreen('endpoint')} icon={<HardDrive size={18} />} label="Windows Endpoint Scan" />
             <SidebarItem active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={18} />} label="Antivirus & File Scan" />
             <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Security Scans" />
             <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Public Breach Intelligence" />
@@ -565,6 +567,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.div className={profile?.status === 'flagged' && !isPermanentOwner ? "pointer-events-none opacity-80" : ""}>
               {activeScreen === 'attack' && <AttackKevIntelligence key="attack" />}
+              {activeScreen === 'endpoint' && <WindowsEndpointScan key="endpoint" />}
               {activeScreen === 'risk' && <EnterpriseRiskWorkspace key="risk" section="risk" />}
               {activeScreen === 'grc' && <EnterpriseRiskWorkspace key="grc" section="grc" />}
               {activeScreen === 'osint' && <EnterpriseRiskWorkspace key="osint" section="osint" onLiveOsint={performPhishingScan} />}

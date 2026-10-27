@@ -71,6 +71,19 @@ check('Bundled threat data is present and scoped transparently', () => {
   assert.ok(data.kev.length >= 1000);
   assert.match(data.source, /not a complete official ATT&CK catalog/);
 });
+check('Windows endpoint scan page and read-only agent are included', () => {
+  assert.match(app, /WindowsEndpointScan/);
+  assert.match(app, /Windows Endpoint Scan/);
+  const endpoint = read('src/components/WindowsEndpointScan.tsx');
+  assert.match(endpoint, /INCOMPLETE/);
+  assert.match(endpoint, /OUTDATED/);
+  assert.match(endpoint, /known-exploited-vulnerabilities-catalog/);
+  const agent = read('scripts/windows-endpoint-agent/Scan-CyberAmour.ps1');
+  assert.match(agent, /scanStatus/);
+  assert.match(agent, /POSSIBLE_MATCH_REQUIRES_VALIDATION/);
+  const csv = read('scripts/windows-endpoint-agent/known_exploited_vulnerabilities.csv');
+  assert.match(csv, /cveID,vendorProject,product/);
+});
 check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
 check('Scan Center does not mount duplicate quick scan panels', () => {
   const scanCenter = app.slice(app.indexOf('function ScanCenter('), app.indexOf('function ', app.indexOf('function ScanCenter(') + 20));
