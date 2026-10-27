@@ -38,6 +38,63 @@ check('unanswered risk questionnaires remain unscored', () => {
   assert.match(enterprise, /answered\.length === 0[\s\S]{0,120}score: null/);
   assert.match(enterprise, /answered\.length < domains\.length[\s\S]{0,100}score: null/);
 });
+check('GRC control centre generates a professional PDF report', () => {
+  assert.match(enterprise, /const generateGrcReport = \(\) =>/);
+  assert.match(enterprise, /Generate GRC PDF report/);
+  assert.match(enterprise, /Control test notes and remediation plan/);
+  assert.match(enterprise, /Not assessed.*unknown, not compliant/i);
+});
+check('GRC records support evidence, owners, severity and remediation', () => {
+  assert.match(enterprise, /evidenceNotes/);
+  assert.match(enterprise, /remediation/);
+  assert.match(enterprise, /assessedAt/);
+  assert.match(enterprise, /Open control issue/);
+});
+check('phone lookup uses public evidence and unknown-owner fallback', () => {
+  const backend = read('functions/index.js');
+  assert.match(backend, /libphonenumber-js/);
+  assert.match(backend, /Owner not identified from available public sources/);
+  assert.match(backend, /publicListings/);
+});
+check('ATT&CK and KEV intelligence module is wired into navigation', () => {
+  assert.match(app, /AttackKevIntelligence/);
+  assert.match(app, /ATT&CK \+ KEV Intelligence/);
+  const module = read('src/components/AttackKevIntelligence.tsx');
+  assert.match(module, /Known Exploited Vulnerabilities/);
+  assert.match(module, /Map to investigation/);
+  assert.match(module, /cyberamour\.attack-kev\.mappings/);
+  assert.match(module, /cisa.gov\/known-exploited-vulnerabilities-catalog/);
+});
+check('Bundled threat data is present and scoped transparently', () => {
+  const data = JSON.parse(read('src/data/attackSnapshot.json'));
+  assert.ok(data.techniques.length >= 30);
+  assert.ok(data.kev.length >= 1000);
+  assert.match(data.source, /not a complete official ATT&CK catalog/);
+});
+check('Windows endpoint scan page and read-only agent are included', () => {
+  assert.match(app, /WindowsEndpointScan/);
+  assert.match(app, /Windows Endpoint Scan/);
+  const endpoint = read('src/components/WindowsEndpointScan.tsx');
+  assert.match(endpoint, /INCOMPLETE/);
+  assert.match(endpoint, /OUTDATED/);
+  assert.match(endpoint, /known-exploited-vulnerabilities-catalog/);
+  const agent = read('scripts/windows-endpoint-agent/Scan-CyberAmour.ps1');
+  assert.match(agent, /scanStatus/);
+  assert.match(agent, /POSSIBLE_MATCH_REQUIRES_VALIDATION/);
+  const csv = read('scripts/windows-endpoint-agent/known_exploited_vulnerabilities.csv');
+  assert.match(csv, /cveID,vendorProject,product/);
+});
+check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
+check('Scan Center does not mount duplicate quick scan panels', () => {
+  const scanCenter = app.slice(app.indexOf('function ScanCenter('), app.indexOf('function ', app.indexOf('function ScanCenter(') + 20));
+  assert.doesNotMatch(scanCenter, /<QuickUrlScanner|<GlobalIdentitySearch/);
+  assert.doesNotMatch(app, /function GlobalIdentitySearch\(/);
+});
+check('Scan Center explains investigation scope and avoids blanket surveillance claims', () => {
+  assert.match(app, /One scan workspace/);
+  assert.match(app, /does not monitor every online activity or private account/i);
+  assert.doesNotMatch(app, /Detect threats in real-time with AI/);
+});
 check('Firebase rules target the named database', () => assert.match(firebase, /ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b/));
 check('client build does not inject Gemini API key', () => assert.doesNotMatch(vite, /define\s*:[\s\S]{0,300}GEMINI_API_KEY/));
 check('local sensor binds only to loopback', () => assert.match(sensor, /127\.0\.0\.1/));

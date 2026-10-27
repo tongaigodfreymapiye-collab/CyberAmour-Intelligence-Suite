@@ -3,6 +3,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const Stripe = require('stripe');
+const { parsePhoneNumberFromString } = require('libphonenumber-js/max');
 
 initializeApp();
 const db = getFirestore(undefined, 'ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b');
@@ -233,6 +234,31 @@ exports.analyzeCyberIntel = onCall({
   const errors = [];
   let groundedSourceCount = 0;
   const now = new Date().toISOString();
+  // Phone metadata is global numbering-plan metadata, not proof of subscriber identity.
+  let phoneMetadata = null;
+  if (kind === 'phone') {
+    try {
+      const parsed = parsePhoneNumberFromString(target);
+      if (parsed) {
+        phoneMetadata = {
+          input: target,
+          internationalFormat: parsed.formatInternational(),
+          e164: parsed.number,
+          country: parsed.country || null,
+          countryCallingCode: parsed.countryCallingCode || null,
+          nationalNumber: parsed.nationalNumber || null,
+          isPossible: parsed.isPossible(),
+          isValid: parsed.isValid(),
+          lineType: parsed.getType() || null,
+          validationNote: 'Numbering-plan metadata only. It does not establish the current subscriber, carrier after porting, or caller authenticity.'
+        };
+        evidence.push({ provider: 'Google libphonenumber metadata', found: true, ...phoneMetadata });
+        sources.push({ title: 'Google libphonenumber international numbering metadata', url: 'https://github.com/google/libphonenumber', provider: 'Google libphonenumber', retrievedAt: now });
+      } else {
+        errors.push('Phone number could not be parsed. Enter an international number with country code (for example, +351...).');
+      }
+    } catch (_) { errors.push('Phone-number metadata could not be parsed.'); }
+  }
   const getSecret = (secret) => { try { const value = String(secret.value() || '').trim(); return /^(?:DISABLED|NOT_CONFIGURED)$/i.test(value) ? '' : value; } catch (_) { return ''; } };
   const vtKey = getSecret(virusTotalApiKey);
   const abuseKey = getSecret(abuseIpDbApiKey);
@@ -288,8 +314,19 @@ exports.analyzeCyberIntel = onCall({
   let webAnalysis = null;
   if (geminiKey) {
     try {
-      const context = JSON.stringify({ kind, target, evidence, sources, retrievedAt: now });
-      const prompt = `You are a cybersecurity threat-intelligence analyst. Analyze ONLY the supplied indicator and collected evidence, and optionally search public web sources for corroboration. Do not invent scans, source links, incidents, CVEs or results. Do not infer personal characteristics. Treat missing provider data as unknown, not safe. Return valid JSON with keys: verdict (Malicious, Suspicious, No known indicators, or Insufficient evidence), riskScore (integer 0-100 or null if evidence is insufficient), summary (short string), findings (array of strings), recommendations (array of strings), limitations (array of strings), sources (array of {title,url}). Cite only real source URLs. Clearly distinguish provider findings from web-search context. If no evidence exists, say so. Input: ${context}`;
+      const context = JSON.stringify({ kind, target, evidence, sources, phoneMetadata, retrievedAt: now });
+      const phoneInstructions = kind === 'phone' ? `
+PHONE LOOKUP REQUIREMENTS (mandatory):
+- Search the exact international number and normalized E.164 number across public web pages. Search public business directories, official company contact pages, government/regulator pages, reputable news, public scam-report pages, and publicly accessible community caller-report databases. Search number variants with and without spaces/punctuation when useful.
+- Identify a person or organisation ONLY when a source explicitly associates that exact number with that identity and the match is strong. Explain exact-number match vs partial/near match. Never guess an owner's name from country, carrier, prefix, or unrelated names.
+- Return phoneIdentity as {status: 'identified'|'possible_match'|'unknown', name: string|null, entityType: string|null, confidence: 'high'|'medium'|'low'|'none', rationale: string}. A known identity requires direct exact-number evidence from a cited public source; if not found, set unknown and name null.
+- Return publicListings as an array of {title,url,site,matchType,summary}. Include only URLs actually returned by Google Search grounding or supplied verified sources. Do not fabricate individual listing URLs.
+- Return spamSignals as an array of {label, source, url, reportsOrEvidence, date}. Distinguish confirmed official warnings, public user reports, and unverified allegations. User reports are signals, not proof of fraud.
+- Return searchLinks as fallback search URLs for the exact number for Google, Bing, DuckDuckGo, Tellows, and WhoCallsMe/WhoCalledMe where a usable public search URL exists. These are search shortcuts, NOT proof that a listing exists.
+- Return phoneMetadata copied from supplied metadata if present. Do not claim live subscriber lookup, SIM ownership, current carrier, geolocation, or Truecaller database access unless an authorized provider actually supplied it.
+- Return configuredSources and sourceCoverage describing which sources actually returned results, and dataGaps. If no owner is verifiable, clearly say 'Owner not identified from available public sources' and show fallback search links. Never label a number safe merely because no reports were found.
+` : '';
+      const prompt = `You are a careful cybersecurity threat-intelligence analyst. Analyze ONLY the supplied indicator and collected evidence, and search public web sources for corroboration where available. Do not invent scans, source links, incidents, CVEs or results. Do not infer personal characteristics. Treat missing provider data as unknown, not safe. ${phoneInstructions} Return valid JSON with keys: verdict (Malicious, Suspicious, No known indicators, or Insufficient evidence), riskScore (integer 0-100 or null if evidence is insufficient), summary (short string), findings (array of strings), recommendations (array of strings), limitations (array of strings), sources (array of {title,url}). For phone additionally return phoneIdentity, publicListings, spamSignals, searchLinks, phoneMetadata, configuredSources, sourceCoverage, and dataGaps. Cite only real source URLs. Clearly distinguish provider findings from web-search context. If no evidence exists, say so. Input: ${context}`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(25000),
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ google_search: {} }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } })
@@ -322,6 +359,20 @@ exports.analyzeCyberIntel = onCall({
     recommendations: webAnalysis && Array.isArray(webAnalysis.recommendations) ? webAnalysis.recommendations : [],
     limitations: [...(webAnalysis && Array.isArray(webAnalysis.limitations) ? webAnalysis.limitations : []), ...(!hasVerifiedEvidence ? ['No verifiable evidence returned. This is not a clean verdict.'] : []), ...errors],
     evidence, sources: sources.filter((item, index, all) => all.findIndex(other => other.url === item.url) === index),
+    ...(kind === 'phone' ? {
+      phoneMetadata,
+      phoneIdentity: webAnalysis && webAnalysis.phoneIdentity || { status: 'unknown', name: null, entityType: null, confidence: 'none', rationale: 'Owner not identified from available public sources.' },
+      publicListings: webAnalysis && Array.isArray(webAnalysis.publicListings) ? webAnalysis.publicListings : [],
+      spamSignals: webAnalysis && Array.isArray(webAnalysis.spamSignals) ? webAnalysis.spamSignals : [],
+      searchLinks: [
+        { title: 'Google exact-number search', url: `https://www.google.com/search?q=${encodeURIComponent('"' + (phoneMetadata && phoneMetadata.e164 || target) + '"')}` },
+        { title: 'Bing exact-number search', url: `https://www.bing.com/search?q=${encodeURIComponent('"' + (phoneMetadata && phoneMetadata.e164 || target) + '"')}` },
+        { title: 'DuckDuckGo exact-number search', url: `https://duckduckgo.com/?q=${encodeURIComponent('"' + (phoneMetadata && phoneMetadata.e164 || target) + '"')}` },
+        { title: 'Tellows indexed reports search', url: `https://www.google.com/search?q=${encodeURIComponent('site:tellows.com ' + (phoneMetadata && phoneMetadata.e164 || target))}` },
+        { title: 'WhoCallsMe indexed reports search', url: `https://www.google.com/search?q=${encodeURIComponent('site:whocallsme.com ' + (phoneMetadata && phoneMetadata.e164 || target))}` }
+      ],
+      dataGaps: webAnalysis && Array.isArray(webAnalysis.dataGaps) ? webAnalysis.dataGaps : ['Public web indexing is incomplete and cannot access private caller-ID address books.']
+    } : {}),
     configuredProviders: { virusTotal: !!vtKey, abuseIpDb: !!abuseKey, alienVaultOTX: !!otxKey, gemini: !!geminiKey },
     status: evidence.length || webAnalysis ? 'completed' : 'partial'
   };

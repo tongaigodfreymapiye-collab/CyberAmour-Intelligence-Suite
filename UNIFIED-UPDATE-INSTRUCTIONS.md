@@ -1,4 +1,4 @@
-# CyberAmour unified update: ATT&CK + KEV + Windows Endpoint Scan
+﻿# CyberAmour unified update: ATT&CK + KEV + Windows Endpoint Scan
 
 This release combines the existing React application, ATT&CK/KEV intelligence workspace, and a Windows-only read-only endpoint inventory agent with a dashboard page for importing scan reports.
 
@@ -57,3 +57,4 @@ git push origin main
 ```
 
 If Git reports conflicts, resolve them before continuing; do not use `git push --force` for this update.
+

@@ -93,8 +93,29 @@ export default function PublicRecordsInvestigation() {
       const result: any = await call({ entityName: entityName.trim(), entityType, jurisdiction: jurisdiction.trim(), disambiguatingContext: context.trim(), purpose: purpose.trim(), includePublicSocial, includePublicImageAbuseReporting, includePublicMaritalStatus, includeIntegrityConduct, authorizationConfirmed });
       setReport(result.data as Investigation);
     } catch (e: any) {
-      const code = e?.code || '';
-      setError(code.includes('permission-denied') ? 'This feature requires a verified Premium / Forensics entitlement. Confirm the account subscription, then deploy the updated Cloud Functions.' : e?.message || 'The public-source investigation could not be completed. No result has been fabricated.');
+      const code = String(e?.code || '');
+      const subject = entityName.trim();
+      const contextTerms = [subject, jurisdiction.trim(), context.trim()].filter(Boolean).join(' ');
+      const q = (text: string) => `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+      const links = [
+        { title: 'Google — exact subject search', url: q(`\"${subject}\" ${jurisdiction.trim()}`.trim()) },
+        { title: 'Bing — exact subject search', url: `https://www.bing.com/search?q=${encodeURIComponent(`\"${subject}\" ${jurisdiction.trim()}`.trim())}` },
+        { title: 'DuckDuckGo — exact subject search', url: `https://duckduckgo.com/?q=${encodeURIComponent(`\"${subject}\" ${jurisdiction.trim()}`.trim())}` },
+        { title: 'Google — official court / legal records', url: q(`\"${subject}\" (site:gov OR site:judiciary OR site:court) ${jurisdiction.trim()}`.trim()) },
+        { title: 'Google — regulator / enforcement records', url: q(`\"${subject}\" (regulator OR enforcement OR sanctions OR investigation) ${jurisdiction.trim()}`.trim()) },
+        { title: 'Google — reputable news coverage', url: q(`\"${subject}\" (news OR report OR press release) ${jurisdiction.trim()}`.trim()) },
+      ];
+      const fallback: Investigation = {
+        investigatedAt: new Date().toISOString(), entityName: subject, entityType, jurisdiction: jurisdiction.trim() || 'Not specified', purpose: purpose.trim(), requestedCategories: ['Public legal and regulatory records', 'Official registers', 'Reputable news', ...(includePublicSocial ? ['Public social posts (leads only)'] : [])],
+        summary: 'Automated server-side research is unavailable on the current hosting setup. This is a manual-search fallback: open the search links, review the original pages, and record only claims supported by source evidence. No identity, allegation, risk finding or search result has been inferred.',
+        riskAssessment: { level: 'Insufficient evidence', rationale: 'No source-linked findings were retrieved by CyberAmour. Search links are starting points, not findings or proof of risk.' },
+        findings: [],
+        coverage: { categoriesSearched: [], queriesUsed: links.map(x => x.title), dataGaps: ['Automated Google Search grounding unavailable; search results have not been retrieved or verified by CyberAmour.'], notSearched: ['Private databases, paywalled sources, non-indexed pages and official records not opened by the investigator.'] },
+        limitations: ['No Cloud Function result was returned. This can occur when the project cannot deploy Cloud Functions on its current Firebase plan, or when the callable is unavailable.', ...(code ? [`Callable error code: ${code}`] : []), ...(e?.message ? [`Technical message: ${String(e.message).slice(0, 400)}`] : []), 'Links open search-engine pages. CyberAmour does not automatically read their results in this fallback.', 'Do not treat absence of search results as proof that no records exist. Verify identity matches and case outcomes from original sources.'],
+        suggestedNextSteps: ['Open the exact-match search first.', 'Check official court, regulator and company registries for the relevant jurisdiction.', 'Record the direct source URL, publication date, subject role and case outcome before drawing a conclusion.'], sources: links, grounded: false
+      };
+      setReport(fallback);
+      setError(code.includes('permission-denied') ? 'The automated investigation is unavailable for this account. Manual public-search links are provided below; no automated findings were generated.' : 'Automated OSINT is unavailable. CyberAmour has provided manual public-search links below; no findings were fabricated.');
     } finally { setLoading(false); }
   };
 
