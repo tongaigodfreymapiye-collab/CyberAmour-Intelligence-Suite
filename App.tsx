@@ -1223,6 +1223,7 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
   const [scanProgress, setScanProgress] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [draftResult, setDraftResult] = useState<any>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleScan = async () => {
@@ -1372,6 +1373,72 @@ function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
             </div>
             
             <p className="text-sm text-text-main mb-4">{result.analysis}</p>
+
+            {result.type === 'phone' && (
+              <div className="space-y-4 mb-5">
+                <div className="p-4 rounded-xl border border-border bg-surface/70">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] mb-3 flex items-center gap-2"><UserIcon size={14} /> Caller identity result</h5>
+                  {result.phoneIdentity?.status === 'identified' && result.phoneIdentity?.name ? (
+                    <div>
+                      <div className="font-bold text-white text-lg">{result.phoneIdentity.name}</div>
+                      <div className="text-xs text-text-dim mt-1">{result.phoneIdentity.entityType || 'Publicly listed identity'} · Match confidence: {result.phoneIdentity.confidence || 'not rated'}</div>
+                      <p className="text-sm text-text-main mt-2">{result.phoneIdentity.rationale}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="font-semibold text-white">Owner not identified from available public sources</div>
+                      <p className="text-sm text-text-dim mt-1">This is an unknown result, not proof that the number is safe. Review the search links and source coverage below.</p>
+                    </div>
+                  )}
+                  {result.phoneMetadata && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-sm">
+                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">International:</span> {result.phoneMetadata.internationalFormat || result.phoneMetadata.e164 || 'Not available'}</div>
+                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Country:</span> {result.phoneMetadata.country || 'Not determined'}</div>
+                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Number valid:</span> {result.phoneMetadata.isValid === true ? 'Valid numbering-plan format' : result.phoneMetadata.isValid === false ? 'Not valid in numbering metadata' : 'Unknown'}</div>
+                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Line type:</span> {result.phoneMetadata.lineType || 'Not available'}</div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-text-dim mt-3">Numbering metadata does not verify subscriber ownership, current carrier, location, or caller ID authenticity.</p>
+                </div>
+
+                {Array.isArray(result.publicListings) && result.publicListings.length > 0 && (
+                  <div className="p-4 rounded-xl border border-border">
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] mb-2">Public websites listing this number</h5>
+                    <div className="space-y-2">{result.publicListings.map((item: any, idx: number) => (
+                      <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="block p-3 rounded-lg bg-surface hover:bg-surface/80 border border-border">
+                        <div className="text-sm font-semibold text-white">{item.title || item.site || item.url}</div>
+                        <div className="text-xs text-text-dim mt-1">{item.site || 'Public website'} · {item.matchType || 'Search result'}{item.summary ? ` · ${item.summary}` : ''}</div>
+                        <div className="text-xs text-[#60A5FA] mt-1 break-all">{item.url}</div>
+                      </a>
+                    ))}</div>
+                  </div>
+                )}
+
+                {Array.isArray(result.spamSignals) && result.spamSignals.length > 0 && (
+                  <div className="p-4 rounded-xl border border-danger/30 bg-danger/5">
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-danger mb-2">Spam / fraud signals — verify before concluding</h5>
+                    <div className="space-y-2">{result.spamSignals.map((item: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-lg border border-border bg-surface/70">
+                        <div className="font-semibold text-sm">{item.label || 'Public report'}</div>
+                        <div className="text-xs text-text-dim mt-1">{item.source || 'Public source'}{item.date ? ` · ${item.date}` : ''}</div>
+                        {item.reportsOrEvidence && <p className="text-sm mt-1">{item.reportsOrEvidence}</p>}
+                        {item.url && <a className="text-xs text-[#60A5FA] underline break-all" href={item.url} target="_blank" rel="noopener noreferrer">Open source evidence</a>}
+                      </div>
+                    ))}</div>
+                  </div>
+                )}
+
+                {Array.isArray(result.searchLinks) && result.searchLinks.length > 0 && (
+                  <div className="p-4 rounded-xl border border-border">
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-text-dim mb-2">Continue investigation — public search links</h5>
+                    <p className="text-xs text-text-dim mb-3">These links help find public listings; they are not themselves evidence that a listing exists.</p>
+                    <div className="flex flex-wrap gap-2">{result.searchLinks.map((item: any, idx: number) => (
+                      <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg border border-border text-xs text-[#60A5FA] hover:bg-surface">{item.title || 'Search web'} ↗</a>
+                    ))}</div>
+                  </div>
+                )}
+              </div>
+            )}
             
             {(result.scamReports || result.maliciousAssociations || result.carrier || result.lineType) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
@@ -2184,6 +2251,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
   const [result, setResult] = useState<any>(null);
   const [draftResult, setDraftResult] = useState<any>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [filterVerdict, setFilterVerdict] = useState<string>('All');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [urgency, setUrgency] = useState<'Low' | 'Medium' | 'High'>('Medium');
@@ -2309,6 +2377,8 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
     setScanning(true);
     setScanProgress(0);
     setResult(null);
+    setDraftResult(null);
+    setScanError(null);
     const logInputName = finalType === 'file' ? imageFile?.name || 'file' : finalType === 'antivirus' ? 'device' : finalInput.substring(0, 10);
     logActivity('scan_started', { type: finalType, input: logInputName + '...', urgency });
     
@@ -2411,7 +2481,8 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         setDraftResult(null);
         return;
       }
-      console.error(e);
+      console.error('Scan Center operation failed; no result should be inferred', e);
+      setScanError(e?.message || 'The scan failed. No result was produced. Check service configuration and try again.');
       playErrorSound();
     } finally {
       if (!cancelRef.current) {
@@ -2855,6 +2926,15 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         </motion.div>
       )}
 
+      {scanError && !scanning && (
+        <div role="alert" className="glass-card p-5 border border-danger/40 rounded-2xl space-y-2">
+          <div className="flex items-center gap-2 text-danger font-bold"><AlertTriangle size={18} /> Scan did not complete</div>
+          <p className="text-sm text-text-main">{scanError}</p>
+          <p className="text-xs text-text-dim">No clean result is implied by this failure. Correct the configuration or permissions and retry.</p>
+          <button onClick={() => setScanError(null)} className="text-xs underline text-text-dim">Dismiss</button>
+        </div>
+      )}
+
       {draftResult && !scanning && !result && (
         <ScanDraftViewer 
           draftResult={draftResult} 
@@ -2928,8 +3008,21 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
               <p className="text-sm text-text-main leading-relaxed">
                 {resItem.type === 'breach' 
                   ? (resItem.found?.length > 0 ? `Your email was exposed in ${resItem.found.length} breaches. Change your passwords immediately.` : "Your email is currently safe from known breaches.")
-                  : resItem.analysis}
+                  : (resItem.analysis || resItem.reason || 'No analysis narrative was returned. Treat this result as insufficient evidence.')}
               </p>
+              {Array.isArray(resItem.sources) && resItem.sources.length > 0 && (
+                <div className="mt-4 rounded-xl border border-border bg-surface/40 p-4">
+                  <h5 className="text-xs font-bold uppercase tracking-widest text-text-dim mb-3">Evidence sources returned by provider</h5>
+                  <ul className="space-y-2">
+                    {resItem.sources.map((source: any, sourceIndex: number) => {
+                      const url = typeof source === 'string' ? source : source.url || source.uri || source.link;
+                      const title = typeof source === 'string' ? source : source.title || source.name || url || 'Source';
+                      return <li key={sourceIndex} className="text-sm">{url && /^https?:\/\//i.test(url) ? <a href={url} target="_blank" rel="noreferrer" className="text-[#00E5FF] underline break-all">{title}</a> : <span className="text-text-main">{title}</span>}</li>;
+                    })}
+                  </ul>
+                </div>
+              )}
+              {resItem.collectedAt && <p className="text-[11px] text-text-dim mt-2">Collected: {new Date(resItem.collectedAt).toLocaleString()} · A search result is not a direct scan of the target.</p>}
               
               {resItem.type !== 'breach' && resItem.redFlags && resItem.redFlags.length > 0 && (
                 <div className="mt-6">
@@ -6891,6 +6984,26 @@ function ScanDraftViewer({ draftResult, setDraftResult, onFinalize, askAI }: any
   const [feedbackPrompt, setFeedbackPrompt] = useState("");
   const [refining, setRefining] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
+  const [aiReview, setAiReview] = useState('');
+  const [reviewingAI, setReviewingAI] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const handleAIReview = async () => {
+    setReviewingAI(true);
+    setAiError('');
+    setAiReview('');
+    try {
+      const prompt = `You are the evidence-review assistant in a cybersecurity forensics application. Analyze these preliminary scan results without inventing facts or changing the underlying findings. Explain: (1) what was actually checked and by which provider if the data states this, (2) key findings and their evidence, (3) source URLs and their limitations, (4) confidence and identity-match caveats, (5) what was not checked, and (6) prioritized next steps. Distinguish observed evidence, provider assertions, AI interpretation, and unknowns. A missing result is not proof of safety. Do not state a scan, malware detection, DNS/TLS/port test, breach lookup, or endpoint inspection occurred unless explicitly supported by the data. Keep the response concise and analyst-ready. Data: ${JSON.stringify(draftResult).slice(0, 24000)}`;
+      const response = await askAI(prompt);
+      if (!response || /AI service is unavailable|No simulated answer|Please sign in/i.test(response)) {
+        setAiError(response || 'AI returned no review.');
+      } else {
+        setAiReview(response);
+      }
+    } catch (error: any) {
+      setAiError(error?.message || 'AI review failed. No AI analysis was produced.');
+    } finally { setReviewingAI(false); }
+  };
 
   const handleRefine = async () => {
     if (!feedbackPrompt) return;
@@ -6943,6 +7056,15 @@ Return ONLY a valid, updated JSON string (with no markdown code blocks). If the 
           <pre>{JSON.stringify(draftResult, null, 2)}</pre>
        </div>
        
+       <div className="mb-4 rounded-2xl border border-[#00E5FF]/30 bg-[#00E5FF]/5 p-4 space-y-3">
+         <div className="flex flex-wrap items-center justify-between gap-3">
+           <div><h4 className="font-bold flex items-center gap-2"><Sparkles size={17} className="text-[#00E5FF]" /> AI Evidence Review</h4><p className="text-xs text-text-dim mt-1">Uses the configured server-side AI assistant to interpret this scan's returned data. It cannot add missing evidence.</p></div>
+           <button onClick={handleAIReview} disabled={reviewingAI} className="px-4 py-2 rounded-xl bg-[#00E5FF] text-slate-950 font-bold text-sm disabled:opacity-50">{reviewingAI ? <span className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Reviewing evidence…</span> : <span className="flex items-center gap-2"><Sparkles size={16} /> Run AI Assist</span>}</button>
+         </div>
+         {aiError && <p role="alert" className="text-sm text-danger">AI Assist unavailable: {aiError}</p>}
+         {aiReview && <div className="rounded-xl bg-black/30 border border-border p-4 text-sm leading-relaxed whitespace-pre-wrap">{aiReview}</div>}
+       </div>
+
        <div className="space-y-3">
          {messages.map((m, i) => (
            <div key={i} className={cn("p-3 rounded-xl max-w-[85%] text-sm", m.role === 'ai' ? "bg-primary/20 text-white self-start" : "bg-surface text-text-main self-end ml-auto")}>

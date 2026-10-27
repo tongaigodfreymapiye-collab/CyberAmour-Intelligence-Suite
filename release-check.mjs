@@ -38,6 +38,25 @@ check('unanswered risk questionnaires remain unscored', () => {
   assert.match(enterprise, /answered\.length === 0[\s\S]{0,120}score: null/);
   assert.match(enterprise, /answered\.length < domains\.length[\s\S]{0,100}score: null/);
 });
+check('GRC control centre generates a professional PDF report', () => {
+  assert.match(enterprise, /const generateGrcReport = \(\) =>/);
+  assert.match(enterprise, /Generate GRC PDF report/);
+  assert.match(enterprise, /Control test notes and remediation plan/);
+  assert.match(enterprise, /Not assessed.*unknown, not compliant/i);
+});
+check('GRC records support evidence, owners, severity and remediation', () => {
+  assert.match(enterprise, /evidenceNotes/);
+  assert.match(enterprise, /remediation/);
+  assert.match(enterprise, /assessedAt/);
+  assert.match(enterprise, /Open control issue/);
+});
+check('phone lookup uses public evidence and unknown-owner fallback', () => {
+  const backend = read('functions/index.js');
+  assert.match(backend, /libphonenumber-js/);
+  assert.match(backend, /Owner not identified from available public sources/);
+  assert.match(backend, /publicListings/);
+});
+check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
 check('Firebase rules target the named database', () => assert.match(firebase, /ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b/));
 check('client build does not inject Gemini API key', () => assert.doesNotMatch(vite, /define\s*:[\s\S]{0,300}GEMINI_API_KEY/));
 check('local sensor binds only to loopback', () => assert.match(sensor, /127\.0\.0\.1/));

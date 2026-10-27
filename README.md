@@ -75,3 +75,8 @@ Review Firebase authentication, Firestore security rules, data retention, tenant
 ## Live OSINT and AI deployment
 
 See [LIVE-OSINT-AI-SETUP.md](LIVE-OSINT-AI-SETUP.md) for Firebase secret setup, real threat-intelligence providers, commercial licensing notes, deployment steps, and release checks. API keys must remain server-side.
+
+
+## GRC Control Assessment update
+
+The GRC Control Centre includes control objectives and suggested test procedures, evidence references and assessor notes, owner and severity fields, test outcomes, due dates, remediation plans, coverage metrics, and downloadable PDF/JSON exports. The PDF contains a control register, gaps, remediation actions, methodology, and limitations. Controls remain locally stored in the browser in this version; evidence is referenced rather than uploaded or independently validated. The report is not a certification or legal opinion.
