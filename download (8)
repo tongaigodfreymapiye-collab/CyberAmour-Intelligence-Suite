@@ -1,5 +1,8 @@
-{
-  "projects": {
-    "default": "gen-lang-client-0695458456"
-  }
-}
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

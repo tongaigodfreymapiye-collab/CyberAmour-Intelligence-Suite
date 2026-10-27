@@ -195,7 +195,21 @@ export default function EnterpriseRiskWorkspace({ section = 'risk', onLiveOsint 
             const result = await onLiveOsint(scanType, osintTarget.trim());
             if (!result || (result.verdict === 'Unknown' && result.reason)) throw new Error(result.reason || 'The scan service returned no usable result.');
             setLiveOsintResult({ ...result, target: osintTarget.trim(), targetType: osintType, collectedAt: new Date().toISOString(), analystNotes: osintNotes.trim() }); playSuccessSound();
-          } catch (err: any) { setLiveOsintError(err?.message || 'Live search failed. Check the network, account scan limits and API configuration.'); playErrorSound(); }
+          } catch (err: any) {
+            const target = osintTarget.trim();
+            const q = (text: string) => `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+            const query = `\"${target}\"`;
+            const links = [
+              { title: 'Google exact-match search', url: q(query) },
+              { title: 'Bing exact-match search', url: `https://www.bing.com/search?q=${encodeURIComponent(query)}` },
+              { title: 'DuckDuckGo exact-match search', url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}` },
+              { title: 'Google public scam / abuse reports', url: q(`${query} (scam OR fraud OR abuse OR phishing OR spam)`) },
+              { title: 'Google official and reputable sources', url: q(`${query} (site:gov OR regulator OR official OR news)`) },
+            ];
+            const collectedAt = new Date().toISOString();
+            setLiveOsintResult({ target, targetType: osintType, collectedAt, verdict: 'Manual review required', riskScore: null, analysis: 'Automated server-side OSINT is unavailable on the current hosting setup. Open the search links and inspect original sources manually. These are search links, not retrieved findings.', reason: 'No automated evidence was returned. Unknown does not mean safe.', sources: links, websites: [], evidence: [], limitations: ['No Cloud Function result was returned. Firebase Cloud Functions deployment is blocked until the project is on a supported billing plan, unless the architecture is changed.', String(err?.message || 'Unknown callable error').slice(0, 400), 'Search links are not proof of identity or wrongdoing. Verify every claim at the original source.'], analystNotes: osintNotes.trim(), fallbackMode: 'manual-public-search' });
+            setLiveOsintError('Automated OSINT failed. Manual public-search links are now available in the results panel; no findings were invented.'); playErrorSound();
+          }
           finally { setLiveOsintLoading(false); }
         }}>
           <Field label="Target"><input className={inputClass} required value={osintTarget} onChange={e => setOsintTarget(e.target.value)} placeholder="e.g. example.org or company name"/></Field>
