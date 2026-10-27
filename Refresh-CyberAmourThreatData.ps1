@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Destination = ".\backend\attack-intel-service\data"
+    [string]$Destination = ".\data"
 )
 $ErrorActionPreference = "Stop"
 $dest = [System.IO.Path]::GetFullPath($Destination)
