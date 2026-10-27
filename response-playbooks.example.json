@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "defaultMode": "approval_required",
+  "description": "Illustrative SOC response policies. These create recommendations only until a tested, authenticated EDR/firewall connector is configured.",
+  "playbooks": [
+    {
+      "id": "critical-alert-host-containment",
+      "name": "Critical endpoint alert",
+      "when": { "severity": ["critical"], "hostRequired": true },
+      "propose": { "action": "isolate_host", "requiresHumanApproval": true },
+      "safeguards": ["verify asset owner", "check business criticality", "confirm EDR supports isolation", "record analyst and reason"]
+    },
+    {
+      "id": "kev-match-patch-priority",
+      "name": "Known exploited vulnerability",
+      "when": { "kevMatchRequired": true },
+      "propose": { "action": "prioritise_patch", "requiresHumanApproval": false },
+      "safeguards": ["confirm vendor/product/version applicability", "confirm exposure", "validate patch compatibility"]
+    },
+    {
+      "id": "high-severity-source-ip",
+      "name": "High severity source IP",
+      "when": { "severity": ["high", "critical"], "sourceIpRequired": true },
+      "propose": { "action": "block_source_ip", "requiresHumanApproval": true },
+      "safeguards": ["validate attribution", "check shared/NAT address", "set expiry", "provide rollback"]
+    }
+  ]
+}
