@@ -1217,458 +1217,6 @@ function AntivirusCenter() {
   return <div className="max-w-5xl mx-auto space-y-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & File Reputation</h1><p className="text-text-dim mt-2 max-w-2xl">Calculate a file's SHA-256 fingerprint locally and check its reputation against a configured live threat-intelligence provider.</p></div><span className="text-xs border border-accent/30 rounded-full px-3 py-2 text-accent">Reputation lookup · not full-device antivirus</span></div><div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm text-text-dim">Important: a website running in a browser cannot scan your entire laptop, memory, running processes or all installed apps. This page does not upload your file to the reputation provider; it submits only the SHA-256 hash. Unknown hashes are not proof of safety.</div><LocalSecuritySensor mode="antivirus" /><div className="glass-card p-6 space-y-5"><label className="block text-sm font-semibold">Select a file to check<input type="file" className="block w-full mt-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" onChange={e => chooseFile(e.target.files?.[0] || null)} /></label>{file && <div className="rounded-xl border border-border p-4 space-y-2"><div className="flex flex-wrap justify-between gap-2"><strong>{file.name}</strong><span className="text-text-dim text-xs">{(file.size/1024).toFixed(1)} KB · {file.type || 'Unknown MIME type'}</span></div><div className="text-xs text-text-dim break-all">SHA-256: {hash || 'Calculating…'}</div></div>}<div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50" disabled={!hash || status==='checking' || status==='hashing'} onClick={checkReputation}>{status==='checking' ? 'Checking live reputation…' : 'Check live reputation'}</button><button className="rounded-xl border border-border px-5 py-3" onClick={() => {setFile(null);setHash('');setReport(null);setMessage('');setStatus('idle');}}>Clear</button></div>{status==='hashing' && <p className="text-sm text-text-dim">Calculating SHA-256 locally…</p>}{message && <p role="status" className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">{message}</p>}{report && <div className="rounded-xl border border-border p-5 space-y-3"><h2 className="text-lg font-bold">Live provider response</h2>{report.notFound ? <p className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">This hash was not found in the provider database. This is an <strong>unknown result</strong>, not a clean verdict. Use a trusted endpoint security product for a full scan.</p> : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Malicious',report.malicious],['Suspicious',report.suspicious],['Harmless',report.harmless],['Undetected',report.undetected]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-surface p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-2xl font-black">{value ?? '—'}</div></div>)}</div>}<p className="text-xs text-text-dim">Source: VirusTotal file reputation · Retrieved {report.retrievedAt || 'just now'}. Reputation results are indicative and can be incomplete.</p>{report.permalink && <a href={report.permalink} target="_blank" rel="noreferrer" className="text-primary underline text-sm">Open provider report</a>}</div>}</div></div>;
 }
 
-function GlobalIdentitySearch({ performScan, askAI, setActiveScreen }: any) {
-  const [searchInput, setSearchInput] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [result, setResult] = useState<any>(null);
-  const [draftResult, setDraftResult] = useState<any>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const handleScan = async () => {
-    if (!searchInput) return;
-    setScanning(true);
-    setResult(null);
-    setErrorMsg(null);
-    setScanProgress(0);
-    
-
-    let typeToScan: any = 'name';
-    const trimmed = searchInput.trim();
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      typeToScan = 'email';
-    } else if (/^\+?[0-9\s\-\(\)]+$/.test(trimmed) && trimmed.replace(/[^0-9]/g, '').length >= 7) {
-      typeToScan = 'phone';
-    } else if (trimmed.toLowerCase().includes('ltd') || trimmed.toLowerCase().includes('inc') || trimmed.toLowerCase().includes('llc') || trimmed.toLowerCase().includes('company')) {
-      typeToScan = 'company';
-    }
-
-    const payload = trimmed;
-
-    try {
-      const res = await performScan(typeToScan, payload);
-      setDraftResult(res);
-    } catch (e: any) {
-      if (e.message === 'LIMIT_REACHED') setErrorMsg("You've used the included scan allowance for this account.");
-      else setErrorMsg(e?.message || 'The live analysis could not be completed. No result has been assumed.');
-      console.error(e);
-    } finally {
-      setScanProgress(0);
-      setScanning(false);
-    }
-  };
-
-  return (
-    <div className="glass-card p-6 space-y-4 relative overflow-hidden">
-      {scanning && (
-        <div className="absolute top-0 left-0 h-1 bg-[#3B82F6]/20 w-full z-0">
-          <motion.div 
-            className="h-full bg-[#3B82F6] shadow-[0_0_10px_rgba(59,130,246,0.8)]"
-            initial={{ width: "0%" }}
-            animate={{ width: "35%" }}
-            transition={{ ease: "linear" }}
-          />
-        </div>
-      )}
-      <div className="flex items-center justify-between gap-3 mb-2 relative z-10">
-        <div className="flex items-center gap-3">
-          <div className="bg-[#3B82F6]/20 p-2 rounded-xl border border-[#3B82F6]/30">
-            <Globe size={18} className="text-[#3B82F6]" />
-          </div>
-          <h4 className="text-sm font-bold uppercase tracking-widest text-text-dim">Global Phone & Identity Lookup</h4>
-        </div>
-        {scanning && <span className="text-xs font-bold text-[#3B82F6]">Waiting for live sources…</span>}
-      </div>
-      <div className="flex flex-col md:flex-row gap-4 relative z-10">
-        <div className="flex-1 flex gap-2">
-          <input 
-            type="text" 
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-            placeholder="Enter name, phone, email, or company to reveal identity & contacts..."
-            className="flex-1 bg-surface/50 border border-border rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-[#3B82F6] transition-colors"
-          />
-          {searchInput && (
-            <button
-              onClick={() => {
-                setSearchInput('');
-                setResult(null);
-                setDraftResult(null);
-                setErrorMsg(null);
-              }}
-              className="px-4 py-3 bg-surface/50 border border-border rounded-xl hover:bg-surface/80 transition-colors flex items-center justify-center text-text-dim hover:text-white"
-              title="Clear Search"
-            >
-              <X size={18} />
-            </button>
-          )}
-        </div>
-        <button 
-          onClick={handleScan}
-          disabled={scanning || !searchInput}
-          className="px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] disabled:opacity-50 text-bg font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105"
-        >
-          {scanning ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><Scan size={18} /></motion.div> : <Search size={18} />}
-          {scanning ? "Searching..." : "Search"}
-        </button>
-      </div>
-      
-      <div className="flex flex-col gap-3 relative z-10 pl-1 mt-3">
-        <div className="flex items-center gap-2">
-           <div className="bg-[#3B82F6]/20 p-1 rounded border border-[#3B82F6]/30">
-               <svg className="w-3 h-3 text-[#3B82F6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-           </div>
-           <span className="text-xs text-text-dim">Public-source results depend on configured live providers. No private phone directory is accessed.</span>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {errorMsg && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-4 p-4 rounded-xl border border-danger/30 bg-danger/10 text-danger text-sm font-medium flex justify-between items-center"
-          >
-            <div>{errorMsg}</div>
-            {setActiveScreen && /LIMIT_REACHED|limit reached/i.test(String(errorMsg)) && (
-              <button onClick={() => setActiveScreen('pricing')} className="px-4 py-2 bg-danger text-white rounded-lg text-xs font-bold hover:bg-danger/80 transition uppercase tracking-widest ml-4 whitespace-nowrap">View plans</button>
-            )}
-          </motion.div>
-        )}
-        {draftResult && !scanning && !result && (
-          <ScanDraftViewer 
-            draftResult={draftResult} 
-            setDraftResult={setDraftResult} 
-            askAI={askAI} 
-            onFinalize={() => {
-               setResult(draftResult);
-               setDraftResult(null);
-            }} 
-          />
-        )}
-        {result && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-4 p-4 rounded-xl border border-border bg-surface overflow-hidden"
-          >
-            <div className="flex items-center gap-3 mb-4">
-               <div className={cn("p-2 rounded-lg", result.verdict === 'Safe' ? "bg-success/20 text-success" : result.verdict === 'Suspicious' ? "bg-accent/20 text-accent" : "bg-danger/20 text-danger")}>
-                  {result.verdict === 'Safe' ? <ShieldCheck size={20} /> : <ShieldAlert size={20} />}
-               </div>
-               <div>
-                  <div className="text-sm font-bold">{result.verdict}</div>
-                  <div className="text-xs text-text-dim capitalize">{searchInput.includes('@') ? 'Email Analysis' : searchInput.match(/^[0-9\+\-\(\)\s]+$/) ? 'Phone Number Public-Source Review' : 'Identity Analysis'}</div>
-               </div>
-               <div className="ml-auto flex items-center gap-2">
-                 <div className="text-xs text-text-dim uppercase tracking-wider font-bold">Risk Score</div>
-                 <div className={cn("text-xl font-bold", result.riskScore >= 70 ? 'text-danger' : result.riskScore >= 40 ? 'text-accent' : 'text-success')}>
-                   {typeof result.riskScore === 'number' ? `${result.riskScore}/100` : 'Not scored'}
-                 </div>
-               </div>
-            </div>
-            
-            <p className="text-sm text-text-main mb-4">{result.analysis}</p>
-
-            {result.type === 'phone' && (
-              <div className="space-y-4 mb-5">
-                <div className="p-4 rounded-xl border border-border bg-surface/70">
-                  <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] mb-3 flex items-center gap-2"><UserIcon size={14} /> Caller identity result</h5>
-                  {result.phoneIdentity?.status === 'identified' && result.phoneIdentity?.name ? (
-                    <div>
-                      <div className="font-bold text-white text-lg">{result.phoneIdentity.name}</div>
-                      <div className="text-xs text-text-dim mt-1">{result.phoneIdentity.entityType || 'Publicly listed identity'} · Match confidence: {result.phoneIdentity.confidence || 'not rated'}</div>
-                      <p className="text-sm text-text-main mt-2">{result.phoneIdentity.rationale}</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="font-semibold text-white">Owner not identified from available public sources</div>
-                      <p className="text-sm text-text-dim mt-1">This is an unknown result, not proof that the number is safe. Review the search links and source coverage below.</p>
-                    </div>
-                  )}
-                  {result.phoneMetadata && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-sm">
-                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">International:</span> {result.phoneMetadata.internationalFormat || result.phoneMetadata.e164 || 'Not available'}</div>
-                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Country:</span> {result.phoneMetadata.country || 'Not determined'}</div>
-                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Number valid:</span> {result.phoneMetadata.isValid === true ? 'Valid numbering-plan format' : result.phoneMetadata.isValid === false ? 'Not valid in numbering metadata' : 'Unknown'}</div>
-                      <div className="p-2 rounded bg-black/10"><span className="text-text-dim">Line type:</span> {result.phoneMetadata.lineType || 'Not available'}</div>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-text-dim mt-3">Numbering metadata does not verify subscriber ownership, current carrier, location, or caller ID authenticity.</p>
-                </div>
-
-                {Array.isArray(result.publicListings) && result.publicListings.length > 0 && (
-                  <div className="p-4 rounded-xl border border-border">
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] mb-2">Public websites listing this number</h5>
-                    <div className="space-y-2">{result.publicListings.map((item: any, idx: number) => (
-                      <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="block p-3 rounded-lg bg-surface hover:bg-surface/80 border border-border">
-                        <div className="text-sm font-semibold text-white">{item.title || item.site || item.url}</div>
-                        <div className="text-xs text-text-dim mt-1">{item.site || 'Public website'} · {item.matchType || 'Search result'}{item.summary ? ` · ${item.summary}` : ''}</div>
-                        <div className="text-xs text-[#60A5FA] mt-1 break-all">{item.url}</div>
-                      </a>
-                    ))}</div>
-                  </div>
-                )}
-
-                {Array.isArray(result.spamSignals) && result.spamSignals.length > 0 && (
-                  <div className="p-4 rounded-xl border border-danger/30 bg-danger/5">
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-danger mb-2">Spam / fraud signals — verify before concluding</h5>
-                    <div className="space-y-2">{result.spamSignals.map((item: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-lg border border-border bg-surface/70">
-                        <div className="font-semibold text-sm">{item.label || 'Public report'}</div>
-                        <div className="text-xs text-text-dim mt-1">{item.source || 'Public source'}{item.date ? ` · ${item.date}` : ''}</div>
-                        {item.reportsOrEvidence && <p className="text-sm mt-1">{item.reportsOrEvidence}</p>}
-                        {item.url && <a className="text-xs text-[#60A5FA] underline break-all" href={item.url} target="_blank" rel="noopener noreferrer">Open source evidence</a>}
-                      </div>
-                    ))}</div>
-                  </div>
-                )}
-
-                {Array.isArray(result.searchLinks) && result.searchLinks.length > 0 && (
-                  <div className="p-4 rounded-xl border border-border">
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-text-dim mb-2">Continue investigation — public search links</h5>
-                    <p className="text-xs text-text-dim mb-3">These links help find public listings; they are not themselves evidence that a listing exists.</p>
-                    <div className="flex flex-wrap gap-2">{result.searchLinks.map((item: any, idx: number) => (
-                      <a key={idx} href={item.url} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg border border-border text-xs text-[#60A5FA] hover:bg-surface">{item.title || 'Search web'} ↗</a>
-                    ))}</div>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {(result.scamReports || result.maliciousAssociations || result.carrier || result.lineType) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
-                {(result.carrier) && (
-                  <div className="p-3 bg-surface border border-border rounded-lg">
-                    <div className="text-[10px] uppercase font-bold text-text-dim mb-1">Carrier</div>
-                    <div>{result.carrier}</div>
-                  </div>
-                )}
-                {(result.lineType) && (
-                  <div className="p-3 bg-surface border border-border rounded-lg">
-                    <div className="text-[10px] uppercase font-bold text-text-dim mb-1">Line Type</div>
-                    <div>{result.lineType}</div>
-                  </div>
-                )}
-                {(result.scamReports) && (
-                  <div className="p-3 bg-danger/10 text-danger rounded-lg border border-danger/20">
-                    <div className="text-[10px] uppercase font-bold mb-1">Scam Reports</div>
-                    <div>{result.scamReports}</div>
-                  </div>
-                )}
-                {(result.maliciousAssociations) && (
-                  <div className="p-3 bg-danger/10 text-danger rounded-lg border border-danger/20">
-                    <div className="text-[10px] uppercase font-bold mb-1">Malicious Associations</div>
-                    <div>{result.maliciousAssociations}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {result.candidates && result.candidates.length > 0 && (
-              <div className="space-y-3 mt-4">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-[#3B82F6] flex items-center gap-2"><UserIcon size={14} /> Identified Owner</h5>
-                {result.candidates.map((candidate: any, idx: number) => (
-                  <div key={idx} className="p-4 bg-white/5 border border-border rounded-xl space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-start gap-4">
-                        {candidate.photoUrl && (
-                          <img src={candidate.photoUrl} alt={candidate.name} className="w-16 h-16 rounded-full object-cover border-2 border-[#3B82F6]" referrerPolicy="no-referrer" />
-                        )}
-                        <div>
-                          <div className="font-bold text-lg text-white">{candidate.name}</div>
-                          {(candidate.fullName || candidate.alias) && (
-                            <div className="text-xs text-text-main mt-1 font-medium">
-                              {[candidate.fullName ? `Full Name: ${candidate.fullName}` : null, candidate.alias ? `Alias: ${candidate.alias}` : null].filter(Boolean).join(' • ')}
-                            </div>
-                          )}
-                          {(candidate.location || candidate.age || candidate.profession || candidate.dateOfBirth || candidate.sex) && (
-                            <div className="text-xs text-text-dim mt-1">
-                              {[candidate.dateOfBirth ? `DOB: ${candidate.dateOfBirth}` : null, candidate.age ? `${candidate.age} yrs` : null, candidate.sex, candidate.profession, candidate.location].filter(Boolean).join(' • ')}
-                            </div>
-                          )}
-                          {(candidate.maritalStatus || candidate.relationshipStatus) && (
-                            <div className="text-xs text-text-dim mt-1">
-                              {[candidate.maritalStatus ? `Marital Status: ${candidate.maritalStatus}` : null, candidate.relationshipStatus ? `Relationship: ${candidate.relationshipStatus}` : null].filter(Boolean).join(' • ')}
-                            </div>
-                          )}
-                          {((candidate.emails && candidate.emails.length > 0) || (candidate.phoneNumbers && candidate.phoneNumbers.length > 0)) && (
-                            <div className="text-xs text-[rgb(59,130,246)] font-medium mt-1">
-                              {[candidate.emails?.length > 0 ? `Emails: ${candidate.emails.join(', ')}` : null, candidate.phoneNumbers?.length > 0 ? `Phone: ${candidate.phoneNumbers.join(', ')}` : null].filter(Boolean).join(' • ')}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-2 space-y-2">
-                       {candidate.publicSpacesLinked && candidate.publicSpacesLinked.length > 0 && (
-                         <ExpandableSection title="Public Spaces Linked" color="#F59E0B">
-                           <ul className="text-sm text-[#94A3B8] list-disc pl-4">
-                             {candidate.publicSpacesLinked.map((space: string, i: number) => (
-                               <li key={i}>{space}</li>
-                             ))}
-                           </ul>
-                         </ExpandableSection>
-                       )}
-                       {candidate.characterAssessment && (
-                         <ExpandableSection title="Character & Integrity Assessment" color="#3B82F6" icon={<GraduationCap size={14}/>}>
-                           <p className="text-xs text-[#3B82F6]/90">{candidate.characterAssessment}</p>
-                         </ExpandableSection>
-                       )}
-                       
-                        {candidate.description && (
-                          <ExpandableSection title="Description / Summary" color="#94A3B8">
-                            <p className="text-sm text-[#94A3B8]">{candidate.description}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.history && (
-                          <ExpandableSection title="History & Background" color="#3B82F6">
-                            <p className="text-sm text-[#94A3B8]">{candidate.history}</p>
-                          </ExpandableSection>
-                        )}
-                        
-                        {candidate.workHistory && (
-                          <ExpandableSection title="Work History" color="#3B82F6">
-                            <p className="text-sm text-[#94A3B8]">{candidate.workHistory}</p>
-                          </ExpandableSection>
-                        )}
-
-                       {candidate.criminalRecords && (
-                         <ExpandableSection title="Criminal & Fraud Records" color="#EF4444">
-                           <p className="text-xs text-[#EF4444]/90">{candidate.criminalRecords}</p>
-                         </ExpandableSection>
-                       )}
-                       
-                        {candidate.moralFidelity && (
-                          <ExpandableSection title="Moral Fidelity" color="#F59E0B">
-                            <p className="text-sm text-[#94A3B8]">{candidate.moralFidelity}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.sexTapeLeakages && (
-                          <ExpandableSection title="Sex Tape Leakages" color="#EF4444" defaultOpen={true}>
-                            <p className="text-sm text-[#94A3B8]">{candidate.sexTapeLeakages}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.sexualScandals && (
-                          <ExpandableSection title="Known Scandals" color="#EF4444" defaultOpen={true}>
-                            <p className="text-sm text-[#94A3B8]">{candidate.sexualScandals}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.relationshipHistory && (
-                          <ExpandableSection title="Relationship History" color="#8B5CF6">
-                            <p className="text-sm text-[#94A3B8]">{candidate.relationshipHistory}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.previousMarriages && (
-                          <ExpandableSection title="Previous Marriages" color="#8B5CF6">
-                            <p className="text-sm text-[#94A3B8]">{candidate.previousMarriages}</p>
-                          </ExpandableSection>
-                        )}
-                        
-                        {candidate.creditWorthiness && (
-                          <ExpandableSection title="Business & Credit Worthiness" color="#10B981">
-                            <p className="text-sm text-[#94A3B8]">{candidate.creditWorthiness}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.financialCredibilityForLoans && (
-                          <ExpandableSection title="Financial Credibility for Loans" color="#10B981">
-                            <p className="text-sm text-[#94A3B8]">{candidate.financialCredibilityForLoans}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {candidate.characterCredibilityForBusiness && (
-                          <ExpandableSection title="Character Credibility for Business" color="#10B981">
-                            <p className="text-sm text-[#94A3B8]">{candidate.characterCredibilityForBusiness}</p>
-                          </ExpandableSection>
-                        )}
-
-                        {(candidate.socialMediaProfiles && candidate.socialMediaProfiles.length > 0) ? (
-                          <ExpandableSection title="Publicly Available Social Media Profiles" color="#10B981" defaultOpen={true}>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {candidate.socialMediaProfiles.map((profile: any, idx: number) => (
-                                <div key={idx} className="p-3 bg-[#10B981]/5 border border-[#10B981]/20 rounded-lg flex flex-col gap-2">
-                                  <a href={profile.url.startsWith('http') ? profile.url : `https://${profile.url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[#10B981] font-medium hover:underline">
-                                    {profile.platform} <span className="text-xs ml-auto">External &nearr;</span>
-                                  </a>
-                                  {(profile.source || profile.date || profile.reliabilityLevel) && (
-                                    <div className="flex flex-wrap gap-2 text-[10px] text-text-dim">
-                                      {profile.reliabilityLevel && <span className={cn("px-1 rounded font-bold", profile.reliabilityLevel === 'High' ? "text-success" : profile.reliabilityLevel === 'Medium' ? "text-[#F59E0B]" : "text-danger")}>{profile.reliabilityLevel}</span>}
-                                      {profile.date && <span>• {profile.date}</span>}
-                                      {profile.source && <span className="truncate max-w-[120px]">• {profile.source.replace(/^https?:\/\//, '')}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </ExpandableSection>
-                        ) : null}
-
-                        {(candidate.associatedCompanies && candidate.associatedCompanies.length > 0) && (
-                          <ExpandableSection title="Associated Companies" color="#F59E0B" icon={<Briefcase size={14} />} defaultOpen={true}>
-                            <div className="space-y-2">
-                              {candidate.associatedCompanies.map((company: any, idx: number) => (
-                                <div key={idx} className="bg-surface/50 p-3 rounded-lg border border-border">
-                                  <div className="text-sm font-bold text-white mb-1">{company.name}</div>
-                                  <div className="text-xs text-[#F59E0B] mb-2">{company.relationship}</div>
-                                  {company.finding && <p className="text-xs text-text-main mb-2">{company.finding}</p>}
-                                  {(company.source || company.date || company.reliabilityLevel) && (
-                                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-dim border-t border-border/50 pt-2">
-                                      {company.reliabilityLevel && <span className={cn("px-1.5 py-0.5 border rounded uppercase", company.reliabilityLevel === 'High' ? "border-success/30 text-success" : company.reliabilityLevel === 'Medium' ? "border-[#F59E0B]/30 text-[#F59E0B]" : "border-danger/30 text-danger")}>{company.reliabilityLevel} Confidence</span>}
-                                      {company.date && <span>{company.date}</span>}
-                                      {company.source && <span className="truncate max-w-[150px]">{company.source.startsWith('http') ? <a href={company.source} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-primary">{company.source.replace(/^https?:\/\//, '')}</a> : company.source}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </ExpandableSection>
-                        )}
-
-                       {candidate.digitalInconsistencies && candidate.digitalInconsistencies.length > 0 && (
-                         <ExpandableSection title="Digital Presence Inconsistencies" color="#F59E0B">
-                           <div className="space-y-3">
-                             {candidate.digitalInconsistencies.map((inc: any, i: number) => (
-                               <div key={i} className="text-xs bg-surface/50 border border-[#F59E0B]/20 p-3 rounded-lg space-y-1">
-                                 <p className="text-[#F59E0B]/90 font-medium">{inc.description || inc}</p>
-                                 {(inc.source || inc.date || inc.reliabilityLevel) && (
-                                   <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-text-dim border-t border-border/50 pt-2">
-                                     {inc.reliabilityLevel && <span className={cn("px-1.5 py-0.5 rounded font-bold", inc.reliabilityLevel === 'High' ? "bg-success/10 text-success" : inc.reliabilityLevel === 'Medium' ? "bg-[#F59E0B]/10 text-[#F59E0B]" : "bg-danger/10 text-danger")}>{inc.reliabilityLevel} Reliability</span>}
-                                     {inc.date && <span>• Date: {inc.date}</span>}
-                                     {inc.source && <span className="truncate max-w-[200px]">• Source: {inc.source}</span>}
-                                   </div>
-                                 )}
-                               </div>
-                             ))}
-                           </div>
-                         </ExpandableSection>
-                       )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {askAI && <AIInsightBox data={result} contextKey={`quick-phone-${searchInput}`} askAI={askAI} />}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-const geoUrl = "https://unpkg.com/world-atlas@2.0.2/countries-110m.json";
-
 function ThreatMap() {
   const mapData = useMemo(() => {
     return [
@@ -2481,8 +2029,58 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         setDraftResult(null);
         return;
       }
-      console.error('Scan Center operation failed; no result should be inferred', e);
-      setScanError(e?.message || 'The scan failed. No result was produced. Check service configuration and try again.');
+      console.error('Scan Center operation failed; no automated result should be inferred', e);
+      const identityTypes = ['email', 'phone', 'name', 'company', 'username', 'domain'];
+      if (identityTypes.includes(finalType) && finalInput.trim()) {
+        // No-Blaze fallback: provide search portals without claiming that they were queried.
+        const target = finalInput.trim();
+        const exact = `"${target}"`;
+        const q = encodeURIComponent(exact);
+        const general = encodeURIComponent(target);
+        const sources: Array<{ title: string; url: string }> = [
+          { title: `Google exact-phrase search for ${target}`, url: `https://www.google.com/search?q=${q}` },
+          { title: `Bing exact-phrase search for ${target}`, url: `https://www.bing.com/search?q=${q}` },
+          { title: `DuckDuckGo exact-phrase search for ${target}`, url: `https://duckduckgo.com/?q=${q}` },
+        ];
+        if (finalType === 'phone') {
+          sources.push(
+            { title: 'Truecaller public phone lookup', url: `https://www.truecaller.com/search/${general}` },
+            { title: 'Tellows caller reports', url: `https://www.tellows.com/num/${general}` },
+            { title: 'WhoCallsMe public caller reports', url: `https://whocallsme.com/Phone-Number.aspx/${general}` },
+          );
+        } else if (finalType === 'email') {
+          sources.push(
+            { title: 'Have I Been Pwned (enter address on official site)', url: 'https://haveibeenpwned.com/' },
+            { title: 'Google indexed email search', url: `https://www.google.com/search?q=${encodeURIComponent(`"${target}" (breach OR leaked OR exposed OR scam)`)}` },
+          );
+        } else if (finalType === 'name') {
+          sources.push(
+            { title: 'Google public records and news search', url: `https://www.google.com/search?q=${encodeURIComponent(`"${target}" (official OR registry OR court OR news)`)}` },
+            { title: 'LinkedIn public profile search', url: `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in "${target}"`)}` },
+          );
+        } else if (finalType === 'company' || finalType === 'domain') {
+          sources.push(
+            { title: 'Official-source search', url: `https://www.google.com/search?q=${encodeURIComponent(`"${target}" (official OR registry OR security advisory OR breach)`)}` },
+            { title: 'CISA known exploited vulnerabilities catalog', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog' },
+          );
+        } else if (finalType === 'username') {
+          sources.push({ title: 'WhatsMyName web search project', url: 'https://whatsmyname.app/' });
+        }
+        setScanError(null);
+        setResult([{
+          type: finalType,
+          input: target,
+          verdict: 'Manual review required',
+          riskScore: null,
+          analysis: `Automated OSINT service was unavailable (${e?.message || 'service error'}). CyberAmour has provided public search links only. These links have not been searched by CyberAmour and are not findings. Open the sources, verify the exact identifier and context, and record evidence manually. No identity or risk conclusion can be made from this fallback alone.`,
+          sources,
+          sourceMode: 'manual-search-links',
+          collectedAt: new Date().toISOString(),
+          redFlags: [],
+        }]);
+      } else {
+        setScanError(e?.message || 'The scan failed. No result was produced. Check service configuration and try again.');
+      }
       playErrorSound();
     } finally {
       if (!cancelRef.current) {
@@ -2505,7 +2103,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
       <div className="space-y-2">
         <h2 className="text-2xl font-bold">Cyber Forensics (Scan Center)</h2>
         <div className="flex items-center justify-between">
-          <p className="text-sm text-text-dim">Detect threats in real-time with AI.</p>
+          <p className="text-sm text-text-dim">Run supported checks, review available evidence, and document findings. Live analysis depends on configured services.</p>
           {!isSubscriber && (
             <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-full text-xs font-bold shadow-[0_0_10px_rgba(139,92,246,0.2)]">
               {profile?.forensicsScansLeft || 0} free scans remaining
@@ -2514,10 +2112,9 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         </div>
       </div>
 
-      {/* Add prominent Quick Scanners here */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <QuickUrlScanner performScan={performScan} askAI={askAI} setActiveScreen={setActiveScreen} />
-        <GlobalIdentitySearch performScan={performScan} askAI={askAI} setActiveScreen={setActiveScreen} />
+      <div className="rounded-2xl border border-border bg-surface/30 p-4 text-sm text-text-dim">
+        <div className="font-semibold text-text-main">One scan workspace</div>
+        Choose a scan type below and run it here. Results and recent searches stay in this workspace to avoid duplicate scan panels. Investigations cover supplied content, configured providers, and public or authorized sources only; this web app does not monitor every online activity or private account.
       </div>
 
       <div className="space-y-4 mb-6">
@@ -2570,6 +2167,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
               </button>
             ))}
           </div>
+          <p className="px-3 pt-2 text-xs text-text-dim">Choose an identity type, enter the exact identifier, then select <strong>Search intel</strong>. If the automated service is unavailable, CyberAmour will provide public search links for manual verification instead of inventing findings.</p>
         </div>
 
         <div>
@@ -2793,7 +2391,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
             disabled={scanning || (!input && !result && !imageFile && recentSearches.length === 0)}
             className="px-6 py-4 bg-surface border border-border disabled:opacity-50 text-text-main font-bold rounded-[20px] hover:bg-white/5 transition-colors"
           >
-            Clear Caches
+            Clear form & recent searches
           </button>
         </div>
         
@@ -2833,7 +2431,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
                  scanType === 'file' ? 'Analyzing File Hash & Structure' : 
                  scanType === 'phishing' ? 'Evaluating Phishing Threat' : 
                  scanType === 'sms' ? 'Detecting Smishing Patterns' :
-                 'Generating Identity Credibility Checks'}
+                 'Reviewing available identity evidence'}
                 <span className="text-[#00E5FF] ml-2 text-xl">Waiting for provider response…</span>
               </h3>
             </div>
@@ -3012,7 +2610,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
               </p>
               {Array.isArray(resItem.sources) && resItem.sources.length > 0 && (
                 <div className="mt-4 rounded-xl border border-border bg-surface/40 p-4">
-                  <h5 className="text-xs font-bold uppercase tracking-widest text-text-dim mb-3">Evidence sources returned by provider</h5>
+                  <h5 className="text-xs font-bold uppercase tracking-widest text-text-dim mb-3">{resItem.sourceMode === 'manual-search-links' ? 'Public search links (not yet searched)' : 'Evidence sources returned by provider'}</h5>
                   <ul className="space-y-2">
                     {resItem.sources.map((source: any, sourceIndex: number) => {
                       const url = typeof source === 'string' ? source : source.url || source.uri || source.link;

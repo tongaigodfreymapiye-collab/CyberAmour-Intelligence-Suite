@@ -57,6 +57,16 @@ check('phone lookup uses public evidence and unknown-owner fallback', () => {
   assert.match(backend, /publicListings/);
 });
 check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
+check('Scan Center does not mount duplicate quick scan panels', () => {
+  const scanCenter = app.slice(app.indexOf('function ScanCenter('), app.indexOf('function ', app.indexOf('function ScanCenter(') + 20));
+  assert.doesNotMatch(scanCenter, /<QuickUrlScanner|<GlobalIdentitySearch/);
+  assert.doesNotMatch(app, /function GlobalIdentitySearch\(/);
+});
+check('Scan Center explains investigation scope and avoids blanket surveillance claims', () => {
+  assert.match(app, /One scan workspace/);
+  assert.match(app, /does not monitor every online activity or private account/i);
+  assert.doesNotMatch(app, /Detect threats in real-time with AI/);
+});
 check('Firebase rules target the named database', () => assert.match(firebase, /ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b/));
 check('client build does not inject Gemini API key', () => assert.doesNotMatch(vite, /define\s*:[\s\S]{0,300}GEMINI_API_KEY/));
 check('local sensor binds only to loopback', () => assert.match(sensor, /127\.0\.0\.1/));
