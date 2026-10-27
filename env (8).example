@@ -1,0 +1,6 @@
+# Do not place provider secrets in frontend .env files or commit real values.
+# Configure secrets for Firebase Cloud Functions instead:
+# firebase functions:secrets:set GEMINI_API_KEY
+# firebase functions:secrets:set VIRUSTOTAL_API_KEY
+# firebase functions:secrets:set ABUSEIPDB_API_KEY
+# firebase functions:secrets:set ALIENVAULT_OTX_API_KEY

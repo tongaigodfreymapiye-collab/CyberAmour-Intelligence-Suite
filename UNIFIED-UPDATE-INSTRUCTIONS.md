@@ -43,3 +43,17 @@ It writes `cyberamour-scan-report.json` next to the script. Exit code `0` indica
 - The browser cannot launch PowerShell directly. Scanning and JSON import are separate steps; no automatic browser-to-agent connection is claimed.
 - The PowerShell script is unsigned. Review and sign it with an organisation-controlled code-signing certificate before production distribution. Do not bypass organisational execution policy.
 - Test on a Windows test machine before production use. Build/release audit checks do not constitute end-to-end Windows scanner testing.
+
+
+## Troubleshooting update (PowerShell path resolution)
+
+The Windows scanner resolves its default KEV CSV and JSON output paths after parameter binding. This avoids a `$PSScriptRoot` empty-string error in some launch contexts. If the remote GitHub branch has commits that are not in your local clone, sync before pushing:
+
+```powershell
+git status
+git fetch origin
+git pull --rebase origin main
+git push origin main
+```
+
+If Git reports conflicts, resolve them before continuing; do not use `git push --force` for this update.
