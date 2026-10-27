@@ -56,6 +56,21 @@ check('phone lookup uses public evidence and unknown-owner fallback', () => {
   assert.match(backend, /Owner not identified from available public sources/);
   assert.match(backend, /publicListings/);
 });
+check('ATT&CK and KEV intelligence module is wired into navigation', () => {
+  assert.match(app, /AttackKevIntelligence/);
+  assert.match(app, /ATT&CK \+ KEV Intelligence/);
+  const module = read('src/components/AttackKevIntelligence.tsx');
+  assert.match(module, /Known Exploited Vulnerabilities/);
+  assert.match(module, /Map to investigation/);
+  assert.match(module, /cyberamour\.attack-kev\.mappings/);
+  assert.match(module, /cisa.gov\/known-exploited-vulnerabilities-catalog/);
+});
+check('Bundled threat data is present and scoped transparently', () => {
+  const data = JSON.parse(read('src/data/attackSnapshot.json'));
+  assert.ok(data.techniques.length >= 30);
+  assert.ok(data.kev.length >= 1000);
+  assert.match(data.source, /not a complete official ATT&CK catalog/);
+});
 check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
 check('Scan Center does not mount duplicate quick scan panels', () => {
   const scanCenter = app.slice(app.indexOf('function ScanCenter('), app.indexOf('function ', app.indexOf('function ScanCenter(') + 20));

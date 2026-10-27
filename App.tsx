@@ -118,6 +118,7 @@ import {
   Line as RechartsLine
 } from 'recharts';
 import { useCyberAmour } from './hooks/useCyberAmour';
+import AttackKevIntelligence from './components/AttackKevIntelligence';
 import { cn } from './lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { QRCodeSVG } from 'qrcode.react';
@@ -151,7 +152,7 @@ import { DeviceHealthChart } from './components/DeviceHealthChart';
 import EnterpriseRiskWorkspace from './components/EnterpriseRiskWorkspace';
 import LocalSecuritySensor from './components/LocalSecuritySensor';
 
-type Screen = 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
+type Screen = 'attack' | 'dashboard' | 'antivirus' | 'scan' | 'alerts' | 'ai' | 'features' | 'settings' | 'pricing' | 'darkweb' | 'network' | 'admin' | 'tasks' | 'identity' | 'guide' | 'clock' | 'risk' | 'grc' | 'osint' | 'cases' | 'reports';
 
 export default function App() {
   // Add global click sound
@@ -464,6 +465,7 @@ export default function App() {
             <SidebarItem active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={18} />} label="Risk Assessments" />
             <SidebarItem active={activeScreen === 'grc'} onClick={() => setActiveScreen('grc')} icon={<CheckSquare size={18} />} label="GRC & Controls" />
             <SidebarItem active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={18} />} label="Threat Intelligence & OSINT" />
+            <SidebarItem active={activeScreen === 'attack'} onClick={() => setActiveScreen('attack')} icon={<Database size={18} />} label="ATT&CK + KEV Intelligence" />
             <SidebarItem active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={18} />} label="Antivirus & File Scan" />
             <SidebarItem active={activeScreen === 'scan'} onClick={() => setActiveScreen('scan')} icon={<Search size={18} />} label="Security Scans" />
             <SidebarItem active={activeScreen === 'darkweb'} onClick={() => setActiveScreen('darkweb')} icon={<Ghost size={18} />} label="Public Breach Intelligence" />
@@ -562,6 +564,7 @@ export default function App() {
           )}
           <AnimatePresence mode="wait">
             <motion.div className={profile?.status === 'flagged' && !isPermanentOwner ? "pointer-events-none opacity-80" : ""}>
+              {activeScreen === 'attack' && <AttackKevIntelligence key="attack" />}
               {activeScreen === 'risk' && <EnterpriseRiskWorkspace key="risk" section="risk" />}
               {activeScreen === 'grc' && <EnterpriseRiskWorkspace key="grc" section="grc" />}
               {activeScreen === 'osint' && <EnterpriseRiskWorkspace key="osint" section="osint" onLiveOsint={performPhishingScan} />}
@@ -654,6 +657,7 @@ export default function App() {
         <NavButton active={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} icon={<Shield size={20} />} label="Home" />
         <NavButton active={activeScreen === 'osint'} onClick={() => setActiveScreen('osint')} icon={<Network size={20} />} label="OSINT" />
         <NavButton active={activeScreen === 'risk'} onClick={() => setActiveScreen('risk')} icon={<ShieldCheck size={20} />} label="Risk" />
+        <NavButton active={activeScreen === 'attack'} onClick={() => setActiveScreen('attack')} icon={<Database size={20} />} label="ATT&CK" />
         <NavButton active={activeScreen === 'antivirus'} onClick={() => setActiveScreen('antivirus')} icon={<ShieldCheck size={20} />} label="Antivirus" />
         <NavButton active={activeScreen === 'settings'} onClick={() => setActiveScreen('settings')} icon={<Settings size={20} />} label="Menu" />
       </nav>
