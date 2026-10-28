@@ -71,13 +71,18 @@ check('Bundled threat data is present and scoped transparently', () => {
   assert.ok(data.kev.length >= 1000);
   assert.match(data.source, /not a complete official ATT&CK catalog/);
 });
-check('Windows endpoint scan page and read-only agent are included', () => {
+check('Windows endpoint scan page invokes the local Defender scanner without file uploads', () => {
   assert.match(app, /WindowsEndpointScan/);
   assert.match(app, /Windows Endpoint Scan/);
   const endpoint = read('src/components/WindowsEndpointScan.tsx');
-  assert.match(endpoint, /INCOMPLETE/);
-  assert.match(endpoint, /OUTDATED/);
-  assert.match(endpoint, /known-exploited-vulnerabilities-catalog/);
+  assert.match(endpoint, /LocalSecuritySensor/);
+  const sensorUi = read('src/components/LocalSecuritySensor.tsx');
+  assert.match(sensorUi, /Start Quick Scan/);
+  assert.match(sensorUi, /Start Full Scan/);
+  assert.doesNotMatch(sensorUi, /type=\"file\"/);
+  const localSensor = read('local-sensor/sensor.py');
+  assert.match(localSensor, /@app.post\(\"\/api\/defender\/scan\"\)/);
+  assert.match(localSensor, /Start-MpScan/);
   const agent = read('scripts/windows-endpoint-agent/Scan-CyberAmour.ps1');
   assert.match(agent, /scanStatus/);
   assert.match(agent, /POSSIBLE_MATCH_REQUIRES_VALIDATION/);

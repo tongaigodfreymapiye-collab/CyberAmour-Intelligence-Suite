@@ -223,6 +223,59 @@ def status(_: None = Depends(require_token)) -> dict[str, Any]:
     return {"service": "CyberAmour Local Security Sensor", "status": "connected", "version": "1.0.0", "tools": _tool_status()}
 
 
+@app.get("/api/defender/status")
+def defender_status(_: None = Depends(require_token)) -> dict[str, Any]:
+    """Return Windows Defender status from this local computer; never changes protection settings."""
+    if os.name != "nt":
+        raise HTTPException(status_code=501, detail="Microsoft Defender endpoint scanning is available only on Windows.")
+    script = "$ErrorActionPreference='Stop'; $s=Get-MpComputerStatus; $t=Get-MpThreatDetection -ErrorAction SilentlyContinue; [pscustomobject]@{AMServiceEnabled=$s.AMServiceEnabled;AntivirusEnabled=$s.AntivirusEnabled;RealTimeProtectionEnabled=$s.RealTimeProtectionEnabled;AntivirusSignatureLastUpdated=$s.AntivirusSignatureLastUpdated;QuickScanAge=$s.QuickScanAge;FullScanAge=$s.FullScanAge;ThreatCount=@($t).Count} | ConvertTo-Json -Compress"
+    try:
+        proc = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(status_code=503, detail=f"Could not query Microsoft Defender: {exc}")
+    if proc.returncode != 0:
+        raise HTTPException(status_code=503, detail=(proc.stderr or "Microsoft Defender status query failed.")[-1200:])
+    try:
+        return {"available": True, "provider": "Microsoft Defender Antivirus", "status": json.loads(proc.stdout)}
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="Microsoft Defender returned an unreadable status response.")
+
+
+class DefenderScanRequest(BaseModel):
+    scanType: str = Field(default="QuickScan", pattern=r"^(QuickScan|FullScan)$")
+
+
+@app.post("/api/defender/scan")
+def run_defender_scan(payload: DefenderScanRequest, _: None = Depends(require_token)) -> dict[str, Any]:
+    """Trigger an explicit user-requested Defender scan on this Windows machine."""
+    if os.name != "nt":
+        raise HTTPException(status_code=501, detail="Microsoft Defender scanning is available only on Windows.")
+    scan_type = payload.scanType
+    script = ("$ErrorActionPreference='Stop'; "
+              f"Start-MpScan -ScanType {scan_type}; "
+              "$s=Get-MpComputerStatus; "
+              "$t=Get-MpThreatDetection -ErrorAction SilentlyContinue; "
+              "[pscustomobject]@{scanType='" + scan_type + "';startedAt=(Get-Date).ToUniversalTime().ToString('o'); "
+              "AntivirusEnabled=$s.AntivirusEnabled;RealTimeProtectionEnabled=$s.RealTimeProtectionEnabled; "
+              "AntivirusSignatureLastUpdated=$s.AntivirusSignatureLastUpdated;ThreatCount=@($t).Count; "
+              "detections=@($t | Select-Object -First 25 ThreatID,ThreatStatusID,InitialDetectionTime,LastThreatStatusChangeTime,ProcessName,Resources)} | ConvertTo-Json -Depth 5 -Compress")
+    try:
+        proc = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True, timeout=3600, check=False)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Defender scan exceeded the one-hour limit. Check Windows Security for scan progress.")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"Could not launch Microsoft Defender: {exc}")
+    if proc.returncode != 0:
+        raise HTTPException(status_code=503, detail=(proc.stderr or "Microsoft Defender scan failed to start.")[-1500:])
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="Defender scan command returned an unreadable response. Check Windows Security for the actual scan status.")
+    result["note"] = "Scan was requested through Microsoft Defender on this computer. Detection counts reflect Defender's current threat history and are not guaranteed to be only from this scan. Check Windows Security for final completion and remediation status."
+    result["splunk"] = _hec({"scanType": scan_type, "ThreatCount": result.get("ThreatCount"), "startedAt": result.get("startedAt")}, "cyberamour:defender:scan")
+    return result
+
+
 @app.post("/api/scan/file")
 async def scan_file(file: UploadFile = File(...), _: None = Depends(require_token)) -> dict[str, Any]:
     path, digest, size = await _save_upload(file)

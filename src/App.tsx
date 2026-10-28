@@ -973,7 +973,7 @@ function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
         </div>
         <div className="flex bg-surface/50 border border-border rounded-lg p-1">
           <button onClick={() => { setScanType('url'); setInput(''); setResult(null); setImageFile(null); }} className={cn("px-3 py-1 text-xs font-bold rounded flex items-center gap-1", scanType === 'url' ? "bg-primary text-white" : "text-text-dim hover:text-white")}><LinkIcon size={12}/> URL</button>
-          <button onClick={() => { setScanType('file'); setInput(''); setResult(null); setImageFile(null); }} className={cn("px-3 py-1 text-xs font-bold rounded flex items-center gap-1", scanType === 'file' ? "bg-primary text-white" : "text-text-dim hover:text-white")}><FileText size={12}/> File</button>
+          <button onClick={() => setActiveScreen('antivirus')} className="px-3 py-1 text-xs font-bold rounded flex items-center gap-1 text-text-dim hover:text-white"><ShieldCheck size={12}/> Device scan</button>
         </div>
       </div>
       
@@ -1007,20 +1007,9 @@ function QuickUrlScanner({ performScan, askAI, setActiveScreen }: any) {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row gap-4 items-center">
-          <div onClick={() => fileInputRef.current?.click()} className="flex-1 w-full bg-surface/30 border border-dashed border-[#10B981]/50 hover:bg-[#10B981]/5 hover:border-[#10B981] cursor-pointer rounded-xl py-3 px-4 flex justify-between items-center transition-colors">
-            <span className={cn("text-sm truncate mr-4", imageFile ? "text-[#10B981] font-bold" : "text-text-dim")}>{imageFile ? imageFile.name : 'Click to select a file...'}</span>
-            <FileText size={18} className="text-[#10B981] shrink-0" />
-            <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setImageFile(f); }} />
-          </div>
-          <button 
-            onClick={handleScan}
-            disabled={scanning || !imageFile}
-            className="px-6 py-3 w-full md:w-auto bg-gradient-to-r from-[#10B981] to-[#34D399] disabled:opacity-50 text-bg font-bold rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105 shrink-0"
-          >
-            {scanning ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><Scan size={18} /></motion.div> : <Scan size={18} />}
-            {scanning ? "Scanning..." : "Scan File"}
-          </button>
+        <div className="rounded-xl border border-border bg-surface/30 p-4 text-sm text-text-dim">
+          File-upload scanning has been removed. To scan this Windows computer, open Antivirus & Protection and run a local Microsoft Defender scan.
+          <button type="button" onClick={() => setActiveScreen('antivirus')} className="ml-3 rounded-lg bg-primary px-3 py-2 font-bold text-white">Open local scanner</button>
         </div>
       )}
 
@@ -1198,35 +1187,7 @@ function DeviceNetworkSummary() {
 }
 
 function AntivirusCenter() {
-  const [file, setFile] = useState<File | null>(null);
-  const [hash, setHash] = useState('');
-  const [status, setStatus] = useState<'idle'|'hashing'|'checking'|'done'|'error'>('idle');
-  const [report, setReport] = useState<any>(null);
-  const [message, setMessage] = useState('');
-  const chooseFile = async (next: File | null) => {
-    setFile(next); setHash(''); setReport(null); setMessage(''); setStatus('idle');
-    if (!next) return;
-    try {
-      setStatus('hashing');
-      const digest = await crypto.subtle.digest('SHA-256', await next.arrayBuffer());
-      const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-      setHash(hex); setStatus('idle');
-    } catch { setStatus('error'); setMessage('This browser could not calculate a SHA-256 hash. Try a modern browser.'); }
-  };
-  const checkReputation = async () => {
-    if (!hash) return;
-    setStatus('checking'); setReport(null); setMessage('');
-    try {
-      const lookup = httpsCallable(functions, 'lookupFileReputation');
-      const result: any = await lookup({ sha256: hash });
-      if (!result.data?.configured) { setStatus('error'); setMessage('Live file reputation is not configured yet. Set the VIRUSTOTAL_API_KEY Firebase secret and deploy the lookupFileReputation Cloud Function. No scan result has been fabricated.'); return; }
-      if (result.data?.found === false) { setReport({ ...result.data, notFound: true }); setStatus('done'); return; }
-      setReport(result.data); setStatus('done');
-    } catch (e: any) {
-      setStatus('error'); setMessage(e?.message || 'The live reputation service could not be reached. No clean verdict is assumed.');
-    }
-  };
-  return <div className="max-w-5xl mx-auto space-y-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & File Reputation</h1><p className="text-text-dim mt-2 max-w-2xl">Calculate a file's SHA-256 fingerprint locally and check its reputation against a configured live threat-intelligence provider.</p></div><span className="text-xs border border-accent/30 rounded-full px-3 py-2 text-accent">Reputation lookup · not full-device antivirus</span></div><div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-sm text-text-dim">Important: a website running in a browser cannot scan your entire laptop, memory, running processes or all installed apps. This page does not upload your file to the reputation provider; it submits only the SHA-256 hash. Unknown hashes are not proof of safety.</div><LocalSecuritySensor mode="antivirus" /><div className="glass-card p-6 space-y-5"><label className="block text-sm font-semibold">Select a file to check<input type="file" className="block w-full mt-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:font-bold file:text-white" onChange={e => chooseFile(e.target.files?.[0] || null)} /></label>{file && <div className="rounded-xl border border-border p-4 space-y-2"><div className="flex flex-wrap justify-between gap-2"><strong>{file.name}</strong><span className="text-text-dim text-xs">{(file.size/1024).toFixed(1)} KB · {file.type || 'Unknown MIME type'}</span></div><div className="text-xs text-text-dim break-all">SHA-256: {hash || 'Calculating…'}</div></div>}<div className="flex flex-wrap gap-3"><button className="rounded-xl bg-primary px-5 py-3 font-bold text-white disabled:opacity-50" disabled={!hash || status==='checking' || status==='hashing'} onClick={checkReputation}>{status==='checking' ? 'Checking live reputation…' : 'Check live reputation'}</button><button className="rounded-xl border border-border px-5 py-3" onClick={() => {setFile(null);setHash('');setReport(null);setMessage('');setStatus('idle');}}>Clear</button></div>{status==='hashing' && <p className="text-sm text-text-dim">Calculating SHA-256 locally…</p>}{message && <p role="status" className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-sm">{message}</p>}{report && <div className="rounded-xl border border-border p-5 space-y-3"><h2 className="text-lg font-bold">Live provider response</h2>{report.notFound ? <p className="rounded-lg border border-accent/30 bg-accent/5 p-4 text-sm">This hash was not found in the provider database. This is an <strong>unknown result</strong>, not a clean verdict. Use a trusted endpoint security product for a full scan.</p> : <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Malicious',report.malicious],['Suspicious',report.suspicious],['Harmless',report.harmless],['Undetected',report.undetected]].map(([label,value])=><div key={String(label)} className="rounded-lg bg-surface p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-2xl font-black">{value ?? '—'}</div></div>)}</div>}<p className="text-xs text-text-dim">Source: VirusTotal file reputation · Retrieved {report.retrievedAt || 'just now'}. Reputation results are indicative and can be incomplete.</p>{report.permalink && <a href={report.permalink} target="_blank" rel="noreferrer" className="text-primary underline text-sm">Open provider report</a>}</div>}</div></div>;
+  return <div className="max-w-6xl mx-auto space-y-6"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Endpoint security</div><h1 className="text-3xl font-black mt-2">Antivirus & Protection</h1><p className="text-text-dim mt-2 max-w-3xl">Run Microsoft Defender scans on this computer through the local CyberAmour sensor. No file uploads are required.</p></div><LocalSecuritySensor mode="antivirus" /></div>;
 }
 
 function ThreatMap() {
@@ -2206,32 +2167,12 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
         <>
           <div className="space-y-4">
             {scanType === 'file' ? (
-               <div className="w-full bg-surface/50 border border-dashed border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/5 transition-colors" onClick={() => fileInputRef.current?.click()}>
-                 <FileText size={48} className="text-primary mb-4" />
-                 <div className="text-sm font-bold text-text-main mb-1">
-                   Upload File for Malware Scan
-                 </div>
-                 <div className="text-xs text-text-dim">Supports executables, documents, archives</div>
-                 {imageFile && <div className="mt-4 text-primary text-sm font-bold">{imageFile.name}</div>}
-                 <input 
-                   type="file" 
-                   ref={fileInputRef} 
-                   className="hidden" 
-                   onChange={(e) => {
-                     const f = e.target.files?.[0];
-                     if (f) {
-                        setImageFile(f);
-                        setInput('File: ' + f.name); // To pass the validation if needed, or simply for visual completeness in some states
-                     }
-                   }}
-                 />
-               </div>
-            ) : scanType === 'antivirus' ? (
+               <div className="w-full bg-surface/50 border border-border rounded-2xl p-8 text-center"><ShieldAlert size={40} className="text-primary mx-auto mb-4"/><div className="text-lg font-bold text-text-main mb-2">Device scanning runs locally</div><p className="text-sm text-text-dim max-w-xl mx-auto mb-4">File upload has been removed. Use Microsoft Defender through the local sensor to scan this Windows device.</p><button onClick={() => setActiveScreen('antivirus')} className="px-4 py-2 rounded-xl bg-primary text-white font-bold">Open local scanner</button></div>) : scanType === 'antivirus' ? (
                <div className="w-full bg-surface/50 border border-border rounded-2xl p-8 text-center">
                  <ShieldAlert size={40} className="text-primary mx-auto mb-4" />
-                 <div className="text-lg font-bold text-text-main mb-2">Full-device scanning is not available in a browser</div>
-                 <div className="text-sm text-text-dim max-w-xl mx-auto mb-4">Use the dedicated Antivirus & File Scan page for local SHA-256 calculation and a configured live reputation lookup. This web app cannot inspect the complete file system or running processes.</div>
-                 <button onClick={() => setActiveScreen('antivirus')} className="px-4 py-2 rounded-xl bg-primary text-white font-bold">Open Antivirus & File Scan</button>
+                 <div className="text-lg font-bold text-text-main mb-2">Local Windows scanning</div>
+                 <div className="text-sm text-text-dim max-w-xl mx-auto mb-4">Run a Quick Scan or Full Scan through the local CyberAmour sensor and Microsoft Defender. No file upload is required.</div>
+                 <button onClick={() => setActiveScreen('antivirus')} className="px-4 py-2 rounded-xl bg-primary text-white font-bold">Open local scanner</button>
                </div>
             ) : (
                 <>
@@ -2394,7 +2335,7 @@ function ScanCenter({ performScan, checkBreaches, logActivity, setActiveScreen, 
             >
               <div className="relative z-10 flex items-center gap-2">
                 <Scan size={20} />
-                {scanType === 'url' ? "Check URL reputation" : scanType === 'antivirus' ? "Open Antivirus & File Scan" : scanType === 'phishing' ? "Analyze Content" : scanType === 'file' ? "Analyze Uploaded File" : "Search intel"}
+                {scanType === 'url' ? "Check URL reputation" : scanType === 'antivirus' ? "Open local scanner" : scanType === 'phishing' ? "Analyze Content" : scanType === 'file' ? "Open local scanner" : "Search intel"}
               </div>
             </button>
           )}
