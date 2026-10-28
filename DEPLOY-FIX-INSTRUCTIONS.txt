@@ -1,19 +1,21 @@
-CYBERAMOUR INTELLIGENCE SUITE — GITHUB PAGES FIX
+CYBERAMOUR INTELLIGENCE SUITE — PATCH DEPLOYMENT NOTES
 
-WHY THE WEBSITE WAS BLANK
-The published HTML was serving /src/main.tsx directly. That is Vite development source and returns 404 on GitHub Pages. The workflow in this ZIP builds the React/Vite project and deploys the generated dist/ folder instead.
+THIS ZIP IS A SOURCE PATCH, NOT A FULL REPOSITORY EXPORT.
+It does not contain package.json, the full src tree, .github/workflows/deploy.yml, Firebase configuration, or the complete backend. Do not upload every extracted item as a replacement for your repository, and do not delete existing files.
 
-UPLOAD
-1. Extract this ZIP.
-2. Upload/replace all extracted files and folders in the ROOT of:
-   https://github.com/tongaigodfreymapiye-collab/CyberAmour-Intelligence-Suite
-3. Ensure the hidden .github/workflows/deploy.yml file is included. If using GitHub's web uploader, hidden folders can be missed; use GitHub Desktop or git if necessary.
-4. Commit to the main branch.
-5. In repository Settings > Pages > Build and deployment > Source, select GitHub Actions (not Deploy from a branch).
-6. Open Actions and inspect the “Build and deploy CyberAmour to GitHub Pages” run. Wait until both build and deploy succeed.
-7. Open https://tongaigodfreymapiye-collab.github.io/CyberAmour-Intelligence-Suite/ and hard-refresh with Ctrl+F5.
+APPLY THE PATCH
+1. Extract the ZIP.
+2. Copy the included files/folders into your existing CyberAmour repository, preserving the directory structure and overwriting only the matching source files.
+3. Keep your existing package files, .github workflows, logo assets, data/, Firebase configuration, .git, and local databases.
+4. Rotate the exposed sensor token using scripts/rotate-sensor-token.ps1 and paste it into the local sensor token field in CyberAmour. Do not share or commit the token.
+5. Start the sensor with scripts/setup-sensor.ps1 and keep its terminal open.
+6. Run the existing repository's lint, build, release audit, and tests. The checks must be run from the full repository, not from this patch directory.
+7. Inspect git diff and git status, then commit and push only intended source changes.
 
-IMPORTANT
-- Do not set Pages to publish the repository root or /src. The workflow publishes dist/.
-- If the workflow fails, open Actions, select the run, and read the first failed step.
-- This package does not automatically revoke exposed API keys. Review the Google API key alert separately, rotate/revoke any valid exposed key, and do not put private API keys in frontend code. A static frontend cannot keep a secret API key private.
+GITHUB PAGES
+The actual deployment workflow is not included in this patch. In your existing GitHub repository, verify that a workflow builds the Vite app and deploys the generated dist/ directory, and that Settings > Pages > Build and deployment > Source is set to GitHub Actions. Do not publish /src or a raw development entrypoint.
+
+SECURITY
+- A static frontend cannot keep private API keys secret. Revoke/rotate any valid exposed keys and keep server secrets out of frontend code.
+- The local sensor binds to 127.0.0.1 and requires bearer-token authentication for protected actions.
+- A successful build is not proof of end-to-end endpoint protection. Verify sensor authentication and test a Microsoft Defender scan on the target Windows computer.

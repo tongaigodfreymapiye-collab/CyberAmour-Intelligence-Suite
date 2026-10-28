@@ -8,11 +8,12 @@ if (-not (Test-Path $EnvFile)) {
   $Template = $Template -replace 'REPLACE_WITH_RANDOM_32_PLUS_CHARACTER_SECRET', $Token
   Set-Content -Path $EnvFile -Value $Template -Encoding utf8
   Write-Host "Created $EnvFile"
-  Write-Host "LOCAL SENSOR TOKEN (paste into CyberAmour; keep private): $Token" -ForegroundColor Yellow
+  try { Set-Clipboard -Value $Token; Write-Host 'Sensor token copied to clipboard. Paste it directly into CyberAmour; do not share it.' -ForegroundColor Yellow } catch { Write-Host 'Sensor token created. Use the local rotate-token script to copy it safely to the clipboard.' -ForegroundColor Yellow }
 } else {
   Write-Host 'local-sensor/.env already exists; keeping its token.'
   $ExistingToken = (Get-Content $EnvFile | Where-Object { $_ -match '^CYBERAMOUR_SENSOR_TOKEN=' } | Select-Object -First 1) -replace '^CYBERAMOUR_SENSOR_TOKEN=', ''
-  Write-Host "LOCAL SENSOR TOKEN (paste into CyberAmour; keep private): $ExistingToken" -ForegroundColor Yellow
+  if (-not $ExistingToken -or $ExistingToken.Length -lt 32) { throw 'The configured sensor token is missing or too short. Run scripts/rotate-sensor-token.ps1.' }
+  try { Set-Clipboard -Value $ExistingToken; Write-Host 'Existing sensor token copied to clipboard. Paste it directly into CyberAmour; do not share it.' -ForegroundColor Yellow } catch { Write-Host 'Existing token is configured. Run scripts/rotate-sensor-token.ps1 to copy it safely to the clipboard.' -ForegroundColor Yellow }
 }
 Push-Location $SensorDir
 try {

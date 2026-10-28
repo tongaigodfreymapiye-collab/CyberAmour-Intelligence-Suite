@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 TOKEN = os.getenv("CYBERAMOUR_SENSOR_TOKEN", "").strip()
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
 MAX_PCAP_PACKETS = max(100, min(int(os.getenv("MAX_PCAP_PACKETS", "5000")), 20000))
