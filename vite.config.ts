@@ -4,7 +4,7 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => ({
-    base: './',
+    base: '/CyberAmour-Intelligence-Suite/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -18,3 +18,4 @@ export default defineConfig(() => ({
     },
   }
 ));
+
