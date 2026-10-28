@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h1>Live Log Viewer</h1>
+
+<pre>
+
+{% for line in logs %}
+
+{{ line }}
+
+{% endfor %}
+
+</pre>
+
+{% endblock %}

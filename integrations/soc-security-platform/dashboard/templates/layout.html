@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>SOC Platform</title>
+
+<style>
+
+body{
+background:#0f172a;
+color:white;
+font-family:Arial;
+margin:0;
+}
+
+nav{
+background:#020617;
+padding:15px;
+}
+
+nav a{
+color:#38bdf8;
+margin-right:20px;
+text-decoration:none;
+font-weight:bold;
+}
+
+.container{
+padding:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<nav>
+
+<a href="/">Dashboard</a>
+<a href="/alerts">Alerts</a>
+<a href="/logs">Logs</a>
+<a href="/map">Attack Map</a>
+<a href="/intel">Threat Intel</a>
+
+</nav>
+
+<div class="container">
+
+{% block content %}
+
+{% endblock %}
+
+</div>
+
+</body>
+</html>

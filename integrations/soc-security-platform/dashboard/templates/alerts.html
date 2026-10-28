@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h1>Security Alerts</h1>
+
+<ul>
+
+{% for alert in alerts %}
+
+<li>
+IP: {{ alert.ip }} | Attack: {{ alert.attack }} | MITRE: {{ alert.mitre }}
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% endblock %}

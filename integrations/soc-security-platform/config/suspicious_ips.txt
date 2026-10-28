@@ -1,0 +1,1 @@
+# Example indicators from the supplied demo SOC project; verify provenance before use.\n# Configure CYBERAMOUR_SUSPICIOUS_IPS_PATH to a curated list to enable IOC matching.\n# 185.220.101.45\n# 103.45.78.22\n# 45.33.32.156\n

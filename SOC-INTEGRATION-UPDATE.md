@@ -17,3 +17,15 @@
 - The dashboard is wired to the API response shapes in `app.py`.
 - A browser can connect to `127.0.0.1` only when the API runs on that same computer. A deployed frontend needs a reachable, secured API URL and matching CORS configuration.
 - A full npm build should be run on a machine with Node.js and dependencies installed.
+
+
+## Merged SOC detection engine
+
+The supplied SOC Security Platform has been integrated as reusable detection logic, not as a second Flask service. CyberAmour now exposes:
+
+- `GET /api/soc/detection-rules`
+- `POST /api/soc/analyze-logs`
+
+The log-analysis API accepts up to 5,000 supplied lines, identifies repeated failed logins (`CA-AUTH-001`, ATT&CK T1110), possible port-scan patterns (`CA-NET-001`, ATT&CK T1046), and optional local IOC matches (`CA-IOC-001`). It returns evidence and limitations and can create deduplicated alerts in the existing CyberAmour SQLite alert store. The SOC dashboard now has a log-batch analysis panel and JSON export.
+
+This does not claim continuous monitoring. The legacy SOC demo runner automatically creates synthetic logs, so it is not launched or wired into production. Local IOC matching is opt-in using `CYBERAMOUR_SUSPICIOUS_IPS_PATH`; sample demo IPs are commented out pending verification.

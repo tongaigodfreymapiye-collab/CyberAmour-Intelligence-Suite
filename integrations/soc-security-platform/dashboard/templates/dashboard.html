@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h1>SOC Monitoring Dashboard</h1>
+
+<p>Total Alerts: {{ total }}</p>
+
+<div>
+{{ attack_chart | safe }}
+</div>
+
+<div>
+{{ ip_chart | safe }}
+</div>
+
+{% endblock %}

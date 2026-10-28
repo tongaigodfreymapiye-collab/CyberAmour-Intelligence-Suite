@@ -100,6 +100,17 @@ export default function EnterpriseRiskWorkspace({ section = 'risk', onLiveOsint 
   const [liveOsintResult, setLiveOsintResult] = useState<any>(null);
   const [liveOsintLoading, setLiveOsintLoading] = useState(false);
   const [liveOsintError, setLiveOsintError] = useState('');
+  const [autoApiBase, setAutoApiBase] = useState(() => {
+    try { return localStorage.getItem('cyberamour.soc.apiBase') || import.meta.env.VITE_SOC_API_BASE_URL || 'http://127.0.0.1:8091'; }
+    catch { return import.meta.env.VITE_SOC_API_BASE_URL || 'http://127.0.0.1:8091'; }
+  });
+  const [autoApiDraft, setAutoApiDraft] = useState(() => {
+    try { return localStorage.getItem('cyberamour.soc.apiBase') || import.meta.env.VITE_SOC_API_BASE_URL || 'http://127.0.0.1:8091'; }
+    catch { return import.meta.env.VITE_SOC_API_BASE_URL || 'http://127.0.0.1:8091'; }
+  });
+  const [autoAssessmentBusy, setAutoAssessmentBusy] = useState(false);
+  const [autoAssessmentError, setAutoAssessmentError] = useState('');
+  const [autoAssessment, setAutoAssessment] = useState<any>(null);
   useEffect(() => { localStorage.setItem(STORAGE.assessments, JSON.stringify(assessments)); }, [assessments]);
   useEffect(() => { localStorage.setItem(STORAGE.controls, JSON.stringify(controls)); }, [controls]);
   useEffect(() => { localStorage.setItem(STORAGE.cases, JSON.stringify(cases)); }, [cases]);
@@ -139,6 +150,81 @@ export default function EnterpriseRiskWorkspace({ section = 'risk', onLiveOsint 
     pdf.save(`${a.id}-risk-report.pdf`); playSuccessSound();
   };
   const exportCSV = () => { const rows = [['id','name','type','scope','date','score','band','findings'], ...assessments.map(a => [a.id,a.name,a.type,a.scope,a.date,String(a.score),a.band,a.findings.join(' | ')])]; const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n'); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'cyberamour-risk-register.csv'; link.click(); URL.revokeObjectURL(url); };
+  const runFullAssessment = async () => {
+    setAutoAssessmentBusy(true); setAutoAssessmentError(''); setAutoAssessment(null);
+    const base = autoApiBase.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) { setAutoAssessmentError('Enter a valid HTTP(S) SOC API base URL.'); setAutoAssessmentBusy(false); return; }
+    try { localStorage.setItem('cyberamour.soc.apiBase', base); } catch { /* storage can be disabled */ }
+    const call = async (path: string, init?: RequestInit) => {
+      const response = await fetch(`${base}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
+      const raw = await response.text(); let data: any = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { data = { message: raw }; }
+      if (!response.ok) throw new Error(`${response.status}: ${data?.detail || data?.message || response.statusText}`);
+      return data;
+    };
+    const jobs = [
+      ['API health', () => call('/api/health')],
+      ['MITRE ATT&CK search dataset', () => call('/api/attack/techniques?limit=500')],
+      ['CISA KEV catalogue', () => call('/api/kev')],
+      ['Windows endpoint inventory + KEV triage', () => call('/api/endpoint/scan', { method: 'POST' })],
+      ['Microsoft Defender status', () => call('/api/defender/status')],
+    ] as const;
+    const settled = await Promise.all(jobs.map(async ([name, run]) => {
+      try { const data = await run(); return { name, status: 'SUCCESS', data, message: 'Source responded successfully.' }; }
+      catch (error) { return { name, status: 'UNAVAILABLE', data: null, message: error instanceof Error ? error.message : String(error) }; }
+    }));
+    const byName = Object.fromEntries(settled.map(item => [item.name, item]));
+    const health = byName['API health'].data;
+    const attack = byName['MITRE ATT&CK search dataset'].data;
+    const kev = byName['CISA KEV catalogue'].data;
+    const endpoint = byName['Windows endpoint inventory + KEV triage'].data;
+    const defender = byName['Microsoft Defender status'].data;
+    const possibleMatches = Array.isArray(endpoint?.possibleKevMatches) ? endpoint.possibleKevMatches : [];
+    const completedChecks = settled.filter(item => item.status === 'SUCCESS').length;
+    const report = {
+      reportId: `CA-AUTO-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`,
+      generatedAt: new Date().toISOString(),
+      apiBase: base,
+      status: completedChecks === settled.length && endpoint?.scanComplete === true ? 'COMPLETE' : completedChecks > 0 ? 'PARTIAL' : 'FAILED',
+      checks: settled,
+      summary: {
+        successfulSources: completedChecks,
+        totalSources: settled.length,
+        attackTechniques: attack?.total_matches ?? attack?.count ?? (Array.isArray(attack?.techniques) ? attack.techniques.length : null),
+        kevRecords: kev?.count ?? (Array.isArray(kev?.records) ? kev.records.length : null),
+        endpointScanStatus: endpoint?.scanStatus || endpoint?.status || 'NOT RUN / UNAVAILABLE',
+        installedApplications: Array.isArray(endpoint?.installedApplications) ? endpoint.installedApplications.length : null,
+        possibleKevMatches: possibleMatches.length,
+        defenderAvailable: defender?.available ?? defender?.status?.available ?? null,
+        defenderStatus: defender?.status || defender?.AntivirusEnabled || 'Not returned',
+      },
+      limitations: [
+        'A possible KEV match based on product/vendor names is not a confirmed vulnerable version. Validate exact product, version, configuration and exposure.',
+        'A missing match is not proof of safety. The endpoint scan is read-only inventory, not a full antivirus or penetration test.',
+        'Unavailable APIs or failed checks remain unknown and are not interpreted as clean.',
+        'No response actions, quarantine or remediation were performed by this report.',
+      ],
+    };
+    setAutoAssessment(report);
+    if (report.status === 'FAILED') setAutoAssessmentError('No SOC API checks succeeded. Verify that the local SOC API is running and CORS allows this GitHub Pages origin.');
+    else if (report.status !== 'COMPLETE') setAutoAssessmentError('Assessment is partial. Review each unavailable source and the endpoint scan warnings before relying on the report.');
+    setAutoAssessmentBusy(false);
+  };
+  const exportAutoAssessment = (format: 'json' | 'pdf') => {
+    if (!autoAssessment) return;
+    if (format === 'json') { downloadJSON(autoAssessment, `${autoAssessment.reportId}.json`); return; }
+    const pdf = new jsPDF();
+    pdf.setFillColor(7, 19, 36); pdf.rect(0, 0, 210, 30, 'F'); pdf.setTextColor(255, 255, 255); pdf.setFontSize(16); pdf.text('CYBERAMOUR | AUTOMATED RISK & INTELLIGENCE REPORT', 12, 14); pdf.setFontSize(8); pdf.text(`Generated ${new Date(autoAssessment.generatedAt).toLocaleString()} · ${autoAssessment.reportId}`, 12, 23);
+    pdf.setTextColor(25, 35, 50); pdf.setFontSize(11); pdf.text(`Overall execution status: ${autoAssessment.status}`, 12, 40); pdf.setFontSize(9); pdf.text(`Sources successful: ${autoAssessment.summary.successfulSources}/${autoAssessment.summary.totalSources}`, 12, 48);
+    autoTable(pdf, { startY: 56, head: [['Check / source', 'Status', 'Result / error']], body: autoAssessment.checks.map((item: any) => [item.name, item.status, item.status === 'SUCCESS' ? (item.message || 'Responded') : item.message]), styles: { fontSize: 7.5, cellPadding: 2 }, headStyles: { fillColor: [11, 87, 112] }, columnStyles: { 0: { cellWidth: 54 }, 1: { cellWidth: 25 }, 2: { cellWidth: 108 } } });
+    let y = ((pdf as any).lastAutoTable?.finalY ?? 100) + 8;
+    pdf.setFontSize(10); pdf.text('Evidence summary', 12, y); y += 6; pdf.setFontSize(8.5);
+    const lines = [`ATT&CK techniques returned: ${autoAssessment.summary.attackTechniques ?? 'Unknown'}`, `KEV records returned: ${autoAssessment.summary.kevRecords ?? 'Unknown'}`, `Endpoint scan: ${autoAssessment.summary.endpointScanStatus}`, `Installed applications inventoried: ${autoAssessment.summary.installedApplications ?? 'Unknown'}`, `Possible KEV name/vendor matches: ${autoAssessment.summary.possibleKevMatches}`, `Defender status: ${String(autoAssessment.summary.defenderStatus)}`];
+    for (const line of lines) { if (y > 275) { pdf.addPage(); y = 18; } pdf.text(line, 12, y); y += 5; }
+    y += 3; pdf.setFontSize(10); pdf.text('Limitations and interpretation', 12, y); y += 6; pdf.setFontSize(8);
+    for (const item of autoAssessment.limitations) { const wrapped = pdf.splitTextToSize(`• ${item}`, 185); if (y + wrapped.length * 4 > 280) { pdf.addPage(); y = 18; } pdf.text(wrapped, 12, y); y += wrapped.length * 4 + 2; }
+    pdf.save(`${autoAssessment.reportId}.pdf`);
+  };
   const updateControl = (id: string, key: keyof GrcItem, value: string) => setControls(prev => prev.map(c => c.id === id ? { ...c, [key]: value } : c));
   const generateGrcReport = () => {
     const assessed = controls.filter(c => c.status !== 'Not assessed' && c.status !== 'Not applicable');
@@ -162,7 +248,16 @@ export default function EnterpriseRiskWorkspace({ section = 'risk', onLiveOsint 
   const downloadJSON = (obj: unknown, filename: string) => { const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); };
   const nav = [{ id: 'risk', label: 'Risk assessments', icon: ShieldCheck }, { id: 'grc', label: 'GRC control centre', icon: ClipboardCheck }, { id: 'osint', label: 'OSINT workspace', icon: Network }, { id: 'cases', label: 'Forensics & cases', icon: Fingerprint }, { id: 'reports', label: 'Reports & exports', icon: FileText }] as const;
   return <div className="space-y-6">
-    <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-[#071426] via-[#0b2038] to-[#10152c] p-6 md:p-8"><div className="pointer-events-none absolute -right-8 -top-16 h-64 w-64 rounded-full bg-primary/10 blur-3xl"/><div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-4"><img src={`${import.meta.env.BASE_URL}assets/cyberamour-logo.png`} className="h-20 w-28 object-contain" alt="CyberAmour shield and lion logo"/><div><div className="text-xs font-bold uppercase tracking-[.25em] text-primary">Cyber Fortress Technologies</div><h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Risk & Intelligence Centre</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Evidence-led risk screening, GRC controls, authorized OSINT notes and forensic case documentation.</p></div></div><div className="flex flex-wrap gap-2"><Button onClick={() => { setTab('risk'); setShowForm(true); }}><Plus size={16}/> New assessment</Button><Button kind="secondary" onClick={() => exportCSV()}><Download size={16}/> Export register</Button></div></div></div>
+    <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-[#071426] via-[#0b2038] to-[#10152c] p-6 md:p-8"><div className="pointer-events-none absolute -right-8 -top-16 h-64 w-64 rounded-full bg-primary/10 blur-3xl"/><div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-4"><img src={`${import.meta.env.BASE_URL}assets/cyberamour-logo.png`} className="h-20 w-28 object-contain" alt="CyberAmour shield and lion logo"/><div><div className="text-xs font-bold uppercase tracking-[.25em] text-primary">Cyber Fortress Technologies</div><h1 className="mt-1 text-2xl font-bold text-white md:text-3xl">Risk & Intelligence Centre</h1><p className="mt-2 max-w-2xl text-sm text-slate-300">Evidence-led risk screening, GRC controls, authorized OSINT notes and forensic case documentation.</p></div></div><div className="flex flex-wrap gap-2"><Button onClick={() => void runFullAssessment()}><Activity size={16}/>{autoAssessmentBusy ? 'Running checks…' : 'Run Full Assessment'}</Button><Button onClick={() => { setTab('risk'); setShowForm(true); }} kind="secondary"><Plus size={16}/> New assessment</Button><Button kind="secondary" onClick={() => exportCSV()}><Download size={16}/> Export register</Button></div></div></div>
+    <section className="glass-card space-y-3 p-4">
+      <div><h2 className="font-semibold">Assessment data connection</h2><p className="mt-1 text-xs text-text-dim">The one-click assessment queries the SOC API, ATT&CK, KEV, the Windows inventory scanner and Defender. A local API must be running; hosted users must provide a reachable secured API URL. The button does not run scans when the API is unavailable.</p></div>
+      <div className="flex flex-col gap-2 sm:flex-row"><input className={inputClass} aria-label="SOC API base URL for automatic assessment" value={autoApiDraft} onChange={e => setAutoApiDraft(e.target.value)} placeholder="http://127.0.0.1:8091"/><Button kind="secondary" onClick={() => { const next = autoApiDraft.trim().replace(/\/+$/, ''); setAutoApiBase(next); try { localStorage.setItem('cyberamour.soc.apiBase', next); } catch { /* storage can be disabled */ } }}>Save API URL</Button></div>
+      {autoAssessmentError && <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-sm text-amber-100">{autoAssessmentError}</div>}
+      {autoAssessment && <div className="space-y-3 rounded-xl border border-border bg-bg/40 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs text-text-dim">{autoAssessment.reportId} · {new Date(autoAssessment.generatedAt).toLocaleString()}</div><h3 className="mt-1 text-lg font-bold">Automated assessment: {autoAssessment.status}</h3><p className="text-sm text-text-dim">{autoAssessment.summary.successfulSources}/{autoAssessment.summary.totalSources} sources responded successfully. Unknown or unavailable results are not treated as clean.</p></div><div className="flex gap-2"><Button kind="secondary" onClick={() => exportAutoAssessment('pdf')}><Download size={15}/> PDF</Button><Button kind="secondary" onClick={() => exportAutoAssessment('json')}>JSON</Button></div></div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{[["ATT&CK techniques", autoAssessment.summary.attackTechniques], ["KEV records", autoAssessment.summary.kevRecords], ["Endpoint scan", autoAssessment.summary.endpointScanStatus], ["Applications inventoried", autoAssessment.summary.installedApplications], ["Possible KEV matches", autoAssessment.summary.possibleKevMatches], ["Defender", autoAssessment.summary.defenderStatus]].map(([label, value]: any) => <Mini key={label} label={label} value={value === null || value === undefined ? 'Unknown / unavailable' : String(value)}/>)}</div>
+      <div className="space-y-2">{autoAssessment.checks.map((check: any) => <div key={check.name} className="rounded-lg border border-border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{check.name}</strong><span className={`rounded-full border px-2 py-1 text-xs ${check.status === 'SUCCESS' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-amber-400/30 bg-amber-400/10 text-amber-100'}`}>{check.status}</span></div><p className="mt-1 break-words text-xs text-text-dim">{check.message}</p>{check.name === 'Windows endpoint inventory + KEV triage' && check.data?.warnings?.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-amber-100">{check.data.warnings.map((warning: string, i: number) => <li key={i}>{warning}</li>)}</ul>}</div>)}</div>
+      <p className="text-xs text-text-dim">This report is generated from actual API responses. Product-name KEV matches are possible matches, not confirmed vulnerabilities. No remediation or blocking action was performed.</p></div>}
+    </section>
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Metric label="Assessments" value={summary.total} icon={<ShieldCheck size={18}/>} /><Metric label="Critical screening" value={summary.critical} icon={<AlertTriangle size={18}/>} /><Metric label="High screening" value={summary.high} icon={<Activity size={18}/>} /><Metric label="Average risk score" value={summary.avg === null ? 'N/A' : `${summary.avg}/100`} icon={<Fingerprint size={18}/>} /></div>
     <div className="flex gap-2 overflow-x-auto rounded-2xl border border-border bg-surface/70 p-2">{nav.map(n => { const Icon = n.icon; return <button key={n.id} onClick={() => { setTab(n.id); setShowForm(false); }} className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${tab === n.id ? 'bg-primary text-slate-950' : 'text-text-dim hover:bg-primary/10 hover:text-text-main'}`}><Icon size={16}/>{n.label}</button>; })}</div>
     {tab === 'risk' && <div className="space-y-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-bold">Risk assessment register</h2><p className="mt-1 text-sm text-text-dim">Assess companies, organisations, suppliers, or authorized individual digital-security exposure.</p></div><div className="flex gap-2"><div className="relative"><Search className="absolute left-3 top-3 text-text-dim" size={16}/><input className={`${inputClass} pl-9`} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search assessments"/></div><Button onClick={() => setShowForm(v => !v)}><Plus size={16}/>{showForm ? 'Close' : 'Assess'}</Button></div></div>

@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<h1>Threat Intelligence</h1>
+
+<ul>
+
+{% for ip in intel %}
+
+<li>{{ ip }}</li>
+
+{% endfor %}
+
+</ul>
+
+{% endblock %}
