@@ -1,44 +1,47 @@
-# CyberAmour SOC Integration Kit
+# CyberAmour Intelligence Suite
 
-An additive starter kit that brings ATT&CK/KEV enrichment, Navigator-compatible coverage exports, SOC alert intake, auditable response proposals, and a data refresh script toward the existing CyberAmour React application.
+CyberAmour is a defensive security workspace by Cyber Fortress Technologies. This cleaned build preserves the existing login, logo, startup animation, colour system and layout while removing the unsupported OSINT/public-records workflows, simulated live-threat map, synthetic breach metrics, and generic scans that could not be performed by a browser.
 
-## Files
+## Supported application features
 
-- `backend/attack-intel-service/` — FastAPI service, ATT&CK lookup, KEV enrichment, SQLite alert/proposal audit store.
-- `src/components/AttackCoveragePanel.tsx` — React ATT&CK search and Navigator layer export panel.
-- `src/services/socIntegrationApi.ts` — typed browser API client.
-- `scripts/Refresh-CyberAmourThreatData.ps1` — downloads official ATT&CK Enterprise STIX and CISA KEV JSON snapshots.
-- `config/response-playbooks.example.json` — example defensive playbooks with approval gates.
-- `docs/INTEGRATION-ARCHITECTURE.md` — merge, run, connector and production guidance.
-- `third-party/` — license and attribution documents for the three uploaded repositories.
+- Firebase Authentication: email sign-in, account registration, email verification and password reset.
+- Security overview and account activity/alert history, using persisted records rather than generated placeholder scores.
+- Windows Defender Quick Scan and Full Scan through the local Windows sensor at `127.0.0.1:8765`. Scan controls remain disabled until the sensor token is accepted.
+- Bundled CISA Known Exploited Vulnerabilities (KEV) and MITRE ATT&CK reference snapshots. These are reference data, not evidence that a vulnerability or technique exists on the signed-in device. Verify freshness with the linked official sources.
+- Risk assessment register, GRC control register, case notes, and CSV/JSON/PDF exports based on records entered by the user. Reports disclose that evidence is not independently validated.
+- AI assistant when the authenticated Firebase Cloud Function and server-side Gemini secret are configured. Provider failures are shown as unavailable; no simulated answer or verdict is substituted.
+- Account settings, notifications, tasks, billing UI, and owner/admin tools. Stripe checkout only works when server-side price IDs and webhook configuration are deployed.
 
-## Important
+## Removed from this build
 
-This is an integration starter, not a complete managed SOC product. It does not yet include endpoint telemetry collection, a production queue, authentication, multi-tenant access control, or live enforcement connectors. Response proposals are not executed. Test in an isolated development environment before using customer systems.
+- OSINT, public-records/person investigation, signup OSINT screening, and public-breach/dark-web scanning.
+- Live threat maps, simulated attack locations, and external map embeds.
+- Invented detection percentages, placeholder score-history points, and fake breach counts.
+- Browser-only claims to scan the whole device, inspect network packets, block traffic, optimize the operating system, or monitor financial transactions.
+- Unconnected file-reputation, network scan and generic scan endpoints that were not wired to a supported integration.
 
-See `docs/INTEGRATION-ARCHITECTURE.md` for the steps.
+## Run locally
 
+Requirements: Node.js 22 and npm.
 
-## SOC API dashboard and local threat intelligence
-
-The application now includes a **SOC API Dashboard** screen. It connects to the local FastAPI service to display API health, query ATT&CK techniques and the CISA KEV snapshot, and submit/list analyst test alerts.
-
-### Start the local SOC API (Windows PowerShell)
-
-From the repository root:
-
-```powershell
-python -m venv .venv-soc
-.\.venv-soc\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-.\Refresh-CyberAmourThreatData.ps1
-python -m uvicorn app:app --host 127.0.0.1 --port 8091
+```bash
+npm ci
+npm run lint
+npm run audit:release
+npm run build
+npm run dev
 ```
 
-Open `http://127.0.0.1:8091/docs` to test the API. Keep the API terminal open. In a second terminal, run `npm ci` and `npm run dev`; open the Vite URL and choose **SOC API Dashboard** from the navigation.
+The Vite app uses `base: './'` for GitHub Pages. The public Firebase web configuration is in `firebase-applet-config.json`; Firebase client configuration is not a substitute for restrictive Firestore security rules. Do not place Gemini, Stripe, VirusTotal or other private provider keys in frontend files. Configure private keys only as Firebase Functions secrets.
 
-The frontend defaults to `http://127.0.0.1:8091`. For another API address, set `VITE_SOC_API_BASE_URL` in `.env.local` and restart Vite. The API CORS allow-list is configured by `CYBERAMOUR_ALLOWED_ORIGINS`; add only trusted frontend origins.
+## Windows Defender local sensor
 
-### Security limitations
+On the Windows computer to be scanned, follow `local-sensor/README.md` and run `scripts/setup-sensor.ps1` from an elevated PowerShell session when required. Keep the sensor bound to loopback. Enter the sensor token in the app; do not publish it or paste it into chat. A browser hosted on another device cannot control a sensor installed on your PC.
 
-This API provides local threat-intelligence enrichment and analyst workflow endpoints. It does not, by itself, collect endpoint telemetry, provide a full antivirus scan, or block attacks. Real-time detection and response require an authorised endpoint sensor or EDR/firewall connector. Do not expose the API publicly without authentication, TLS, restrictive network access and production security review. Response proposals are not proof that an action was executed.
+## Deployment
+
+The GitHub Actions workflow at `.github/workflows/deploy.yml` builds the Vite app and publishes `dist` to GitHub Pages on pushes to `main`. Confirm the workflow succeeds before relying on the published version. This source package has had static release checks and TypeScript/TSX syntax checks run; a full dependency install/build could not be completed in this environment because the npm registry package was not available in the local cache. Run the commands above on your computer or in GitHub Actions before production use.
+
+## Important limitations
+
+This is not a substitute for an EDR platform, a penetration test, a certified GRC audit, or a forensic acquisition tool. The website does not independently validate uploaded evidence or certify that a device is safe.

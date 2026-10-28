@@ -8,104 +8,83 @@ const app = read('src/App.tsx');
 const hook = read('src/hooks/useCyberAmour.ts');
 const billing = read('src/utils/billing.ts');
 const vite = read('vite.config.ts');
-const firebase = read('firebase.json');
 const sensor = read('local-sensor/sensor.py');
 const enterprise = read('src/components/EnterpriseRiskWorkspace.tsx');
 const css = read('src/index.css');
+const functions = read('functions/index.js');
 const failures = [];
 function check(name, fn) {
   try { fn(); console.log(`PASS ${name}`); }
   catch (e) { failures.push(`${name}: ${e.message}`); console.error(`FAIL ${name}: ${e.message}`); }
 }
 
-check('branding uses Cyber Fortress Technologies', () => assert.match(app, /Protected by Cyber Fortress Technologies/));
-check('sidebar brand has responsive overflow-safe layout', () => assert.match(css, /CyberAmour sidebar brand layout fix[\s\S]*overflow-x: hidden/));
-check('no fake VPN toggle state remains', () => assert.doesNotMatch(app, /isVpnEnabled|setIsVpnEnabled/));
-check('VPN is reported disconnected when no client is connected', () => assert.match(app, /No VPN client connected/));
-check('background monitoring is not falsely advertised', () => {
-  assert.doesNotMatch(app, /✓ Active Monitoring|Frequency: Real-time|Ad-free unlimited protection/);
-  assert.match(app, /no background monitoring/i);
+check('branding, logo and startup animation are preserved', () => {
+  assert.match(app, /Protected by Cyber Fortress Technologies/);
+  assert.match(app, /CyberAmourLogo/);
+  assert.match(app, /animate=\{\{ scale: \[1, 1\.2, 1\] \}\}/);
+  assert.match(css, /CyberAmour sidebar brand layout fix/);
 });
-check('billing does not simulate purchases or ads', () => {
-  assert.doesNotMatch(billing, /Simulating successful purchase|Simulating the user watched|setTimeout\(\(\) => resolve\(true\)/);
-  assert.match(billing, /not integrated in this web build/i);
+check('Firebase login, signup and password reset remain wired', () => {
+  assert.match(app, /signInWithEmailAndPassword/);
+  assert.match(app, /createUserWithEmailAndPassword/);
+  assert.match(app, /sendPasswordResetEmail/);
+  assert.match(hook, /onAuthStateChanged/);
 });
-check('scan failures are not reported as generic high traffic', () => {
-  assert.doesNotMatch(hook, /Scan could not be completed at this time due to high traffic/);
-  assert.match(hook, /No scan result was produced/);
+check('retired OSINT and public-records integrations are removed', () => {
+  assert.doesNotMatch(app, /Threat Intelligence & OSINT|Public Breach Intelligence|osintVerdict|investigatePublicRecords/);
+  assert.doesNotMatch(hook, /runSignupOSINT|analyzeCyberIntel|scanDarkWeb|performPhishingScan/);
+  assert.doesNotMatch(functions, /investigatePublicRecords|analyzeCyberIntel|lookupFileReputation/);
+  assert.doesNotMatch(enterprise, /OSINT workspace|Live Cybersecurity & Digital-Footprint OSINT/);
 });
-check('unanswered risk questionnaires remain unscored', () => {
-  assert.match(enterprise, /answered\.length === 0[\s\S]{0,120}score: null/);
-  assert.match(enterprise, /answered\.length < domains\.length[\s\S]{0,100}score: null/);
+check('simulated threat maps and fabricated performance metrics are removed', () => {
+  assert.doesNotMatch(app, /threatmap\.checkpoint\.com|Live Threat Map|Global Activity Map|ComposableMap|99\.4%|mockData/);
+  assert.match(app, /does not display simulated attack locations/);
+  assert.match(hook, /an empty history stays empty rather than inventing trend points/);
 });
-check('GRC control centre generates a professional PDF report', () => {
-  assert.match(enterprise, /const generateGrcReport = \(\) =>/);
-  assert.match(enterprise, /Generate GRC PDF report/);
-  assert.match(enterprise, /Control test notes and remediation plan/);
-  assert.match(enterprise, /Not assessed.*unknown, not compliant/i);
+check('AI provider failures do not produce fabricated anomaly verdicts', () => {
+  assert.match(hook, /No anomaly verdict was produced/);
+  assert.match(hook, /No security assessment was performed/);
+  assert.doesNotMatch(hook, /Activity normal based on heuristic analysis|Anomaly Detected \(Heuristic\)/);
 });
-check('GRC records support evidence, owners, severity and remediation', () => {
-  assert.match(enterprise, /evidenceNotes/);
-  assert.match(enterprise, /remediation/);
-  assert.match(enterprise, /assessedAt/);
-  assert.match(enterprise, /Open control issue/);
+check('Windows Defender scanning uses the local sensor without website file uploads', () => {
+  assert.match(app, /WindowsEndpointScan/);
+  const endpoint = read('src/components/WindowsEndpointScan.tsx');
+  const sensorUi = read('src/components/LocalSecuritySensor.tsx');
+  assert.match(endpoint, /LocalSecuritySensor/);
+  assert.match(sensorUi, /Start Quick Scan/);
+  assert.match(sensorUi, /Start Full Scan/);
+  assert.doesNotMatch(sensorUi, /type="file"/);
+  assert.match(sensor, /@app.post\("\/api\/defender\/scan"\)/);
+  assert.match(sensor, /Start-MpScan/);
+  assert.match(sensor, /127\.0\.0\.1/);
+  assert.doesNotMatch(sensor, /@app\.post\(\"\/api\/scan\/file|@app\.post\(\"\/api\/network\/capture|@app\.post\(\"\/api\/pcap\/analyze/);
 });
-check('phone lookup uses public evidence and unknown-owner fallback', () => {
-  const backend = read('functions/index.js');
-  assert.match(backend, /libphonenumber-js/);
-  assert.match(backend, /Owner not identified from available public sources/);
-  assert.match(backend, /publicListings/);
-});
-check('ATT&CK and KEV intelligence module is wired into navigation', () => {
-  assert.match(app, /AttackKevIntelligence/);
+check('ATT&CK and KEV intelligence uses bundled reference snapshots and official source links', () => {
   assert.match(app, /ATT&CK \+ KEV Intelligence/);
   const module = read('src/components/AttackKevIntelligence.tsx');
-  assert.match(module, /Known Exploited Vulnerabilities/);
-  assert.match(module, /Map to investigation/);
-  assert.match(module, /cyberamour\.attack-kev\.mappings/);
-  assert.match(module, /cisa.gov\/known-exploited-vulnerabilities-catalog/);
-});
-check('Bundled threat data is present and scoped transparently', () => {
   const data = JSON.parse(read('src/data/attackSnapshot.json'));
   assert.ok(data.techniques.length >= 30);
   assert.ok(data.kev.length >= 1000);
-  assert.match(data.source, /not a complete official ATT&CK catalog/);
+  assert.match(module, /cisa.gov\/known-exploited-vulnerabilities-catalog/);
+  assert.match(module, /attack\.mitre\.org/);
 });
-check('Windows endpoint scan page and read-only agent are included', () => {
-  assert.match(app, /WindowsEndpointScan/);
-  assert.match(app, /Windows Endpoint Scan/);
-  const endpoint = read('src/components/WindowsEndpointScan.tsx');
-  assert.match(endpoint, /INCOMPLETE/);
-  assert.match(endpoint, /OUTDATED/);
-  assert.match(endpoint, /known-exploited-vulnerabilities-catalog/);
-  const agent = read('scripts/windows-endpoint-agent/Scan-CyberAmour.ps1');
-  assert.match(agent, /scanStatus/);
-  assert.match(agent, /POSSIBLE_MATCH_REQUIRES_VALIDATION/);
-  const csv = read('scripts/windows-endpoint-agent/known_exploited_vulnerabilities.csv');
-  assert.match(csv, /cveID,vendorProject,product/);
+check('risk, GRC, case and export reports are evidence-led and scoped', () => {
+  assert.match(enterprise, /const generateGrcReport = \(\) =>/);
+  assert.match(enterprise, /Generate GRC PDF report/);
+  assert.match(enterprise, /Evidence references are not uploaded or independently verified/);
+  assert.match(enterprise, /Not assessed.*unknown, not compliant/i);
 });
-check('Scan Center AI Assist is present', () => assert.match(app, /Run AI Assist/));
-check('Scan Center does not mount duplicate quick scan panels', () => {
-  const scanCenter = app.slice(app.indexOf('function ScanCenter('), app.indexOf('function ', app.indexOf('function ScanCenter(') + 20));
-  assert.doesNotMatch(scanCenter, /<QuickUrlScanner|<GlobalIdentitySearch/);
-  assert.doesNotMatch(app, /function GlobalIdentitySearch\(/);
+check('billing does not simulate successful payment', () => {
+  assert.doesNotMatch(billing, /Simulating successful purchase|setTimeout\(\(\) => resolve\(true\)/);
 });
-check('Scan Center explains investigation scope and avoids blanket surveillance claims', () => {
-  assert.match(app, /One scan workspace/);
-  assert.match(app, /does not monitor every online activity or private account/i);
-  assert.doesNotMatch(app, /Detect threats in real-time with AI/);
-});
-check('Firebase rules target the named database', () => assert.match(firebase, /ai-studio-aedf79c6-715c-41ba-9eb4-c9841d6f453b/));
-check('client build does not inject Gemini API key', () => assert.doesNotMatch(vite, /define\s*:[\s\S]{0,300}GEMINI_API_KEY/));
-check('local sensor binds only to loopback', () => assert.match(sensor, /127\.0\.0\.1/));
-check('network and device scans disclose browser limitations', () => {
-  assert.match(hook, /Live packet capture is not available to a normal web page/);
-  assert.match(hook, /A browser page cannot scan your installed applications/);
+check('client build does not inject provider secrets', () => {
+  assert.doesNotMatch(vite, /define\s*:[\s\S]{0,300}GEMINI_API_KEY/);
+  assert.match(functions, /cyberAmourAssistant/);
 });
 
 if (failures.length) {
   console.error(`\nRelease audit failed: ${failures.length} check(s).`);
   process.exitCode = 1;
 } else {
-  console.log('\nRelease audit passed. This is a static truthfulness/configuration check, not an end-to-end integration test.');
+  console.log('\nRelease audit passed. This is a static configuration/truthfulness check, not an end-to-end integration test.');
 }

@@ -2,29 +2,10 @@
 # Read-only inventory. It does not remediate, disable controls, or upload data.
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory=$false)][string]$KevCsvPath,
-  [Parameter(Mandatory=$false)][string]$OutputPath
+  [Parameter(Mandatory=$false)][string]$KevCsvPath = (Join-Path $PSScriptRoot 'known_exploited_vulnerabilities.csv'),
+  [Parameter(Mandatory=$false)][string]$OutputPath = (Join-Path $PSScriptRoot 'cyberamour-scan-report.json')
 )
 $ErrorActionPreference = 'Stop'
-
-# Resolve defaults after parameter binding. In some launch contexts, $PSScriptRoot
-# is empty while parameter default expressions are being evaluated.
-$scriptDirectory = $PSScriptRoot
-if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
-  if (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
-    $scriptDirectory = Split-Path -Parent $PSCommandPath
-  } elseif ($MyInvocation.MyCommand.Path) {
-    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-  } else {
-    $scriptDirectory = (Get-Location).Path
-  }
-}
-if ([string]::IsNullOrWhiteSpace($KevCsvPath)) {
-  $KevCsvPath = Join-Path $scriptDirectory 'known_exploited_vulnerabilities.csv'
-}
-if ([string]::IsNullOrWhiteSpace($OutputPath)) {
-  $OutputPath = Join-Path $scriptDirectory 'cyberamour-scan-report.json'
-}
 $started = (Get-Date).ToUniversalTime()
 $checks = [ordered]@{}
 $warnings = New-Object System.Collections.Generic.List[string]
