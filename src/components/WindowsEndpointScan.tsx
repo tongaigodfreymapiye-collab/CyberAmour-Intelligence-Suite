@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, FileUp, ShieldAlert, ShieldCheck, Upload } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Download, FileUp, ShieldAlert, ShieldCheck, Upload, RefreshCw, Activity } from 'lucide-react';
 
 type AnyRecord = Record<string, any>;
 type KevRow = Record<string, string>;
@@ -33,6 +33,78 @@ export default function WindowsEndpointScan() {
   const [kevName, setKevName] = useState('');
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [defenderStatus, setDefenderStatus] = useState<AnyRecord | null>(null);
+  const [defenderThreats, setDefenderThreats] = useState<AnyRecord | null>(null);
+  const [defenderBusy, setDefenderBusy] = useState(false);
+  const [defenderMessage, setDefenderMessage] = useState('');
+  const [bodmasDirectory, setBodmasDirectory] = useState('C:\\Users\\DELL\\Downloads');
+  const [bodmasQuarantine, setBodmasQuarantine] = useState(false);
+  const [bodmasBusy, setBodmasBusy] = useState(false);
+  const [bodmasResult, setBodmasResult] = useState<AnyRecord | null>(null);
+  const [bodmasMessage, setBodmasMessage] = useState('');
+  const apiBase = (import.meta as any).env?.VITE_SOC_API_URL || 'http://127.0.0.1:8091';
+  const refreshDefender = async () => {
+    setDefenderBusy(true); setDefenderMessage('');
+    try {
+      const [statusResponse, threatsResponse] = await Promise.all([
+        fetch(`${apiBase}/api/defender/status`),
+        fetch(`${apiBase}/api/defender/threats`)
+      ]);
+      const statusPayload = await statusResponse.json();
+      const threatsPayload = await threatsResponse.json();
+      if (!statusResponse.ok) throw new Error(statusPayload.detail || `Defender status failed (${statusResponse.status})`);
+      if (!threatsResponse.ok) throw new Error(threatsPayload.detail || `Defender detections failed (${threatsResponse.status})`);
+      setDefenderStatus(statusPayload); setDefenderThreats(threatsPayload);
+    } catch (e: any) { setDefenderMessage(e?.message || 'Could not contact the local Defender integration.'); }
+    finally { setDefenderBusy(false); }
+  };
+  const requestDefenderScan = async (scanType: 'QuickScan' | 'FullScan') => {
+    setDefenderBusy(true); setDefenderMessage('');
+    try {
+      const response = await fetch(`${apiBase}/api/defender/scan?scan_type=${scanType}`, { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `Scan request failed (${response.status})`);
+      setDefenderMessage(payload.message || `${scanType} request sent to Microsoft Defender.`);
+    } catch (e: any) { setDefenderMessage(e?.message || 'Could not request a Defender scan.'); }
+    finally { setDefenderBusy(false); }
+  };
+  const runBodmasScan = async () => {
+    setBodmasBusy(true); setBodmasMessage(''); setBodmasResult(null);
+    try {
+      const response = await fetch(`${apiBase}/api/malware/scan`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directory: bodmasDirectory, quarantine_matches: bodmasQuarantine, max_files: 5000 })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `BODMAS scan failed (${response.status})`);
+      setBodmasResult(payload);
+      setBodmasMessage(payload.status === 'PARTIAL' ? 'Scan finished with skipped files; review the incomplete result.' : 'Hash comparison finished. Review any matches before taking further action.');
+    } catch (e: any) { setBodmasMessage(e?.message || 'Could not run the local BODMAS hash scan.'); }
+    finally { setBodmasBusy(false); }
+  };
+  useEffect(() => { void refreshDefender(); }, []);
+  const [scanning, setScanning] = useState(false);
+  const runAutomaticScan = async () => {
+    setError('');
+    setScanning(true);
+    try {
+      const response = await fetch(`${(import.meta as any).env?.VITE_SOC_API_URL || 'http://127.0.0.1:8091'}/api/endpoint/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || `Local scan failed (${response.status}).`);
+      if (!payload || typeof payload !== 'object' || !('scanStatus' in payload) || !Array.isArray(payload.installedApplications)) {
+        throw new Error('The local scanner returned an unexpected report format.');
+      }
+      setReport(payload);
+      setReportName('Automatic local scan');
+    } catch (e: any) {
+      setError(e?.message || 'Could not connect to the local CyberAmour scanner. Ensure the local API is running on this Windows computer.');
+    } finally {
+      setScanning(false);
+    }
+  };
   const importReport = async (file?: File) => {
     if (!file) return;
     setError('');
@@ -88,7 +160,32 @@ export default function WindowsEndpointScan() {
   };
   return <div className="max-w-6xl mx-auto space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4"><div><div className="text-xs uppercase tracking-[.2em] text-primary font-bold">Defensive endpoint inventory</div><h1 className="text-3xl font-black mt-2">Windows Endpoint Scan</h1><p className="text-text-dim mt-2 max-w-3xl">Import a report produced by the read-only Windows PowerShell agent, then review its completeness and triage possible matches against the CISA KEV snapshot.</p></div><a className="text-sm text-primary underline" href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noreferrer">Official CISA KEV catalog</a></header>
-    <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-text-dim"><strong className="text-amber-200">Important:</strong> a browser cannot launch PowerShell or inspect the whole device. Run <code>scripts/windows-endpoint-agent/Scan-CyberAmour.ps1</code> locally, then import its JSON report here. Product-name matches are leads for analyst validation, not proof of vulnerability or compromise.</div>
+    <section className="glass-card p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-xl font-black flex items-center gap-2"><ShieldCheck size={20}/> Microsoft Defender protection</h2><p className="text-sm text-text-dim mt-1">Read Defender status and request Defender-managed scans. This does not replace Defender's real-time protection engine.</p></div>
+        <button onClick={refreshDefender} disabled={defenderBusy} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50"><Activity size={15}/>{defenderBusy ? 'Working…' : 'Refresh status'}</button>
+      </div>
+      {defenderMessage && <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-sm">{defenderMessage}</div>}
+      {defenderStatus && <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <div className="rounded-lg border border-border p-3"><span className="text-text-dim">Antivirus service</span><p className="font-bold mt-1">{defenderStatus.AMServiceEnabled ? 'Enabled' : 'Disabled / unavailable'}</p></div>
+        <div className="rounded-lg border border-border p-3"><span className="text-text-dim">Antivirus protection</span><p className="font-bold mt-1">{defenderStatus.AntivirusEnabled ? 'Enabled' : 'Disabled / unavailable'}</p></div>
+        <div className="rounded-lg border border-border p-3"><span className="text-text-dim">Real-time protection</span><p className={`font-bold mt-1 ${defenderStatus.RealTimeProtectionEnabled ? 'text-success' : 'text-amber-200'}`}>{defenderStatus.RealTimeProtectionEnabled ? 'Enabled' : 'Disabled / unavailable'}</p></div>
+        <div className="rounded-lg border border-border p-3"><span className="text-text-dim">Security intelligence</span><p className="font-bold mt-1 break-all">{defenderStatus.AntivirusSignatureVersion || 'Unknown'}</p><p className="text-xs text-text-dim">{defenderStatus.AntivirusSignatureLastUpdated || 'Update time unavailable'}</p></div>
+        <div className="rounded-lg border border-border p-3"><span className="text-text-dim">Recorded Defender detections</span><p className="font-bold mt-1">{defenderThreats?.count ?? '—'}</p></div>
+      </div>}
+      <div className="flex flex-wrap gap-2"><button disabled={defenderBusy} onClick={() => requestDefenderScan('QuickScan')} className="rounded-lg bg-primary px-4 py-2 font-bold text-white disabled:opacity-50">Request Quick Scan</button><button disabled={defenderBusy} onClick={() => requestDefenderScan('FullScan')} className="rounded-lg border border-border px-4 py-2 font-bold disabled:opacity-50">Request Full Scan</button></div>
+      <p className="text-xs text-text-dim">A successful request means Windows accepted the request, not that the scan has finished. Full scans can take a long time. Use the Windows Security app to review detailed results and remediation.</p>
+      {defenderThreats?.detections?.length > 0 && <div className="overflow-x-auto"><h3 className="font-bold mb-2">Recent recorded detections</h3><table className="w-full text-sm"><thead><tr className="text-left text-text-dim"><th className="p-2">Threat ID</th><th className="p-2">Detected</th><th className="p-2">Action success</th><th className="p-2">Resources</th></tr></thead><tbody>{defenderThreats.detections.slice(0,100).map((d: AnyRecord, i: number) => <tr key={`${d.ThreatID}-${i}`} className="border-t border-border"><td className="p-2">{d.ThreatID ?? '—'}</td><td className="p-2">{d.InitialDetectionTime ?? '—'}</td><td className="p-2">{String(d.ActionSuccess ?? 'Unknown')}</td><td className="p-2 max-w-sm break-all">{Array.isArray(d.Resources) ? d.Resources.join(', ') : String(d.Resources ?? '—')}</td></tr>)}</tbody></table></div>}
+    </section>
+    <section className="glass-card p-5 space-y-4">
+      <div><h2 className="text-xl font-black flex items-center gap-2"><ShieldAlert size={20}/> BODMAS hash detection & quarantine</h2><p className="text-sm text-text-dim mt-1">Compares SHA-256 hashes of files on this Windows computer with the included historical BODMAS metadata. It does not use the dataset to classify unknown files.</p></div>
+      <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end"><label className="block text-sm">Folder to scan<input value={bodmasDirectory} onChange={e => setBodmasDirectory(e.target.value)} className="mt-1 block w-full rounded-lg border border-border bg-transparent px-3 py-2" placeholder="C:\\Users\\DELL\\Downloads"/></label><button disabled={bodmasBusy || !bodmasDirectory.trim()} onClick={runBodmasScan} className="rounded-lg bg-primary px-4 py-2 font-bold text-white disabled:opacity-50">{bodmasBusy ? 'Scanning hashes…' : 'Scan folder hashes'}</button></div>
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={bodmasQuarantine} onChange={e => setBodmasQuarantine(e.target.checked)} className="mt-1"/><span><strong>Quarantine exact malware hash matches.</strong> Matched files are moved to CyberAmour's local quarantine folder, not deleted. Leave unchecked for detection-only mode. Use only on folders you are authorised to scan.</span></label>
+      {bodmasMessage && <div className="rounded-lg border border-border p-3 text-sm">{bodmasMessage}</div>}
+      {bodmasResult && <div className="space-y-3"><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Files checked',bodmasResult.files_checked],['Skipped',bodmasResult.files_skipped],['Malware hash matches',bodmasResult.malware_hash_matches],['Quarantined',bodmasResult.quarantined]].map(([label,value]) => <div key={String(label)} className="rounded-lg border border-border p-3"><div className="text-xs text-text-dim">{label}</div><div className="text-xl font-black">{value}</div></div>)}</div><p className="text-xs text-text-dim">{bodmasResult.warning}</p>{bodmasResult.results?.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-text-dim"><th className="p-2">File</th><th className="p-2">SHA-256</th><th className="p-2">Family</th><th className="p-2">Action</th></tr></thead><tbody>{bodmasResult.results.map((r: AnyRecord, i: number) => <tr key={`${r.sha256}-${i}`} className="border-t border-border"><td className="p-2 break-all">{r.path}</td><td className="p-2 break-all">{r.sha256}</td><td className="p-2">{r.family}</td><td className="p-2">{r.action}</td></tr>)}</tbody></table></div>}</div>}
+      <p className="text-xs text-text-dim">This is historical hash matching (samples dated 2019–2020), not real-time blocking. Microsoft Defender remains responsible for prevention and remediation. A missing hash match does not mean a file is safe.</p>
+    </section>
+    <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2"><div className="text-sm text-text-dim"><strong className="text-primary">Automatic local scan:</strong> this button asks the locally running CyberAmour API on this same computer to launch the bundled read-only PowerShell inventory script. It does not run on a remote hosted website. Product-name matches are leads for analyst validation, not proof of vulnerability or compromise.</div><button type="button" onClick={runAutomaticScan} disabled={scanning} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-semibold text-white disabled:opacity-60"><RefreshCw size={16} className={scanning ? "animate-spin" : ""}/>{scanning ? "Scanning this Windows device…" : "Run automatic Windows scan"}</button></div>
     <div className="grid md:grid-cols-2 gap-4">
       <section className="glass-card p-5 space-y-3"><h2 className="font-bold flex items-center gap-2"><Upload size={18}/> Import scan report (JSON)</h2><p className="text-sm text-text-dim">Select <code>cyberamour-scan-report.json</code> created by the Windows agent.</p><input aria-label="Import Windows scan JSON" type="file" accept=".json,application/json" onChange={e => importReport(e.target.files?.[0])} className="block w-full text-sm"/>{reportName && <p className="text-xs text-text-dim">Loaded: {reportName}</p>}</section>
       <section className="glass-card p-5 space-y-3"><h2 className="font-bold flex items-center gap-2"><FileUp size={18}/> Import CISA KEV snapshot (CSV)</h2><p className="text-sm text-text-dim">Use the supplied <code>known_exploited_vulnerabilities.csv</code>. The bundled ATT&CK/KEV workspace is a separate point-in-time reference.</p><input aria-label="Import CISA KEV CSV" type="file" accept=".csv,text/csv" onChange={e => importKev(e.target.files?.[0])} className="block w-full text-sm"/>{kevName && <p className="text-xs text-text-dim">Loaded: {kevName} · {kev.length.toLocaleString()} rows</p>}</section>

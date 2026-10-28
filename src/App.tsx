@@ -1,3 +1,4 @@
+import { geoUrl } from "./worldMapData";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -6752,3 +6753,5 @@ function DownloadQRModal({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+

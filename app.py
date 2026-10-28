@@ -3,7 +3,11 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
+import hashlib
+import shutil
 import sqlite3
+import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +24,10 @@ DB_PATH = Path(os.getenv("CYBERAMOUR_DB_PATH", str(DATA_DIR / "soc.db")))
 ATTACK_STIX_PATH = Path(os.getenv("ATTACK_STIX_PATH", str(DATA_DIR / "enterprise-attack.json")))
 KEV_JSON_PATH = Path(os.getenv("KEV_JSON_PATH", str(DATA_DIR / "known_exploited_vulnerabilities.json")))
 KEV_CSV_PATH = Path(os.getenv("KEV_CSV_PATH", str(DATA_DIR / "known_exploited_vulnerabilities.csv")))
+BODMAS_CSV_PATH = Path(os.getenv("BODMAS_CSV_PATH", str(DATA_DIR / "bodmas_metadata.csv")))
+BODMAS_DB_PATH = DATA_DIR / "bodmas_hashes.sqlite3"
+QUARANTINE_DIR = DATA_DIR / "quarantine"
+QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_ORIGINS = [x.strip() for x in os.getenv("CYBERAMOUR_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if x.strip()]
 
 app = FastAPI(
@@ -240,6 +248,239 @@ def propose_actions(alert: AlertIn, kev_matches: list[dict[str, Any]]) -> list[d
             "rationale": "One or more CVEs match the supplied Known Exploited Vulnerabilities snapshot. Confirm the installed product/version and exposure.",
         })
     return proposals
+
+
+
+@app.post("/api/endpoint/scan")
+def run_local_endpoint_scan() -> dict[str, Any]:
+    """Run the bundled read-only Windows inventory script; no arbitrary command input."""
+    if os.name != "nt":
+        raise HTTPException(status_code=501, detail="Automatic endpoint scan is supported only on Windows.")
+    script = BASE_DIR / "Scan-CyberAmour.ps1"
+    kev_csv = KEV_CSV_PATH
+    report_path = DATA_DIR / "cyberamour-scan-report.json"
+    if not script.is_file():
+        raise HTTPException(status_code=500, detail=f"Bundled scanner not found: {script}")
+    if not kev_csv.is_file():
+        raise HTTPException(status_code=500, detail="Bundled CISA KEV CSV is missing beside the scanner.")
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned",
+             "-File", str(script), "-KevCsvPath", str(kev_csv), "-OutputPath", str(report_path)],
+            capture_output=True, text=True, timeout=120, check=False,
+            cwd=str(script.parent),
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Endpoint scan exceeded 120 seconds; check the local agent.")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not launch PowerShell: {exc}")
+    if not report_path.is_file():
+        detail = (result.stderr or result.stdout or "Scanner did not produce a report.")[-3000:]
+        raise HTTPException(status_code=500, detail=detail)
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Scanner report is not valid JSON: {exc}")
+    report["_execution"] = {
+        "exitCode": result.returncode,
+        "completedAt": utc_now(),
+        "stderr": (result.stderr or "")[-1500:],
+    }
+    return report
+
+
+def _run_defender_action(action: str, scan_type: str | None = None) -> dict[str, Any]:
+    """Call a fixed, bundled Defender integration script. No arbitrary commands are accepted."""
+    if os.name != "nt":
+        raise HTTPException(status_code=501, detail="Microsoft Defender integration is available only on Windows.")
+    script = BASE_DIR / "scripts" / "Defender-Integration.ps1"
+    if not script.is_file():
+        raise HTTPException(status_code=500, detail="Defender integration script is missing.")
+    command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned",
+               "-File", str(script), "-Action", action]
+    if scan_type:
+        command.extend(["-ScanType", scan_type])
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=45, check=False, cwd=str(BASE_DIR))
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Defender request timed out.")
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Could not start PowerShell: {exc}")
+    if result.returncode != 0:
+        raise HTTPException(status_code=503, detail=(result.stderr or result.stdout or "Defender command failed.")[-2500:])
+    try:
+        # Script writes one compact JSON object to stdout.
+        return json.loads(result.stdout.strip().splitlines()[-1])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Defender script returned invalid JSON.")
+
+
+@app.get("/api/defender/status")
+def defender_status():
+    """Return Microsoft Defender status. Does not change protection settings."""
+    return _run_defender_action("status")
+
+
+@app.get("/api/defender/threats")
+def defender_threats():
+    """Return locally recorded Defender detections, if the Windows cmdlets are available."""
+    return _run_defender_action("threats")
+
+
+@app.post("/api/defender/scan")
+def defender_scan(scan_type: str = Query(default="QuickScan", pattern="^(QuickScan|FullScan)$")):
+    """Request a Defender quick or full scan; execution and remediation remain Defender-managed."""
+    return _run_defender_action("scan", scan_type)
+
+
+
+
+def _bodmas_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(BODMAS_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _ensure_bodmas_index() -> dict[str, Any]:
+    """Build a local indexed hash catalogue from the supplied BODMAS metadata CSV."""
+    if not BODMAS_CSV_PATH.is_file():
+        return {"available": False, "reason": "bodmas_metadata.csv not found", "records": 0}
+    source_mtime = BODMAS_CSV_PATH.stat().st_mtime_ns
+    source_size = BODMAS_CSV_PATH.stat().st_size
+    with _bodmas_db() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS metadata (sha TEXT PRIMARY KEY, timestamp TEXT, family TEXT, classification TEXT NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS index_info (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        row = conn.execute("SELECT value FROM index_info WHERE key='source_signature'").fetchone()
+        signature = f"{source_mtime}:{source_size}"
+        if row and row["value"] == signature:
+            count = conn.execute("SELECT COUNT(*) AS n FROM metadata").fetchone()["n"]
+            return {"available": True, "records": count, "indexed": True, "source": BODMAS_CSV_PATH.name}
+        conn.execute("DELETE FROM metadata")
+        conn.execute("DELETE FROM index_info")
+        conn.commit()
+        count = 0
+        with BODMAS_CSV_PATH.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            required = {"sha", "timestamp", "family"}
+            if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+                raise HTTPException(status_code=422, detail="BODMAS metadata must have sha, timestamp, and family columns.")
+            batch = []
+            for item in reader:
+                sha = str(item.get("sha") or "").strip().lower()
+                if not re.fullmatch(r"[a-f0-9]{64}", sha):
+                    continue
+                family = str(item.get("family") or "").strip()
+                classification = "malware" if family else "benign"
+                batch.append((sha, str(item.get("timestamp") or ""), family, classification))
+                if len(batch) >= 5000:
+                    conn.executemany("INSERT OR REPLACE INTO metadata(sha,timestamp,family,classification) VALUES(?,?,?,?)", batch)
+                    count += len(batch); batch = []
+            if batch:
+                conn.executemany("INSERT OR REPLACE INTO metadata(sha,timestamp,family,classification) VALUES(?,?,?,?)", batch)
+                count += len(batch)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_metadata_classification ON metadata(classification)")
+        conn.execute("INSERT OR REPLACE INTO index_info(key,value) VALUES('source_signature',?)", (signature,))
+        conn.commit()
+    return {"available": True, "records": count, "indexed": True, "source": BODMAS_CSV_PATH.name}
+
+
+def _bodmas_lookup(sha: str) -> dict[str, Any] | None:
+    with _bodmas_db() as conn:
+        row = conn.execute("SELECT sha,timestamp,family,classification FROM metadata WHERE sha=?", (sha.lower(),)).fetchone()
+    return dict(row) if row else None
+
+
+class MalwareScanRequest(BaseModel):
+    directory: str = Field(min_length=1, max_length=1000)
+    quarantine_matches: bool = False
+    max_files: int = Field(default=5000, ge=1, le=20000)
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+@app.get("/api/malware/database/status")
+def malware_database_status():
+    """Index status for the local BODMAS hash/family metadata; not an antivirus signature database."""
+    try:
+        return _ensure_bodmas_index() | {
+            "dataset": "BODMAS metadata",
+            "classification_note": "Non-empty family is labelled malware; empty family is labelled benign in the source metadata.",
+            "limitations": ["Historical samples (2019-2020)", "Hash matches only; unknown hashes are inconclusive", "Metadata contains no binaries or model feature vectors"],
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not index BODMAS metadata: {type(exc).__name__}: {exc}")
+
+
+@app.get("/api/malware/hash/{sha256}")
+def malware_hash_lookup(sha256: str):
+    if not re.fullmatch(r"[a-fA-F0-9]{64}", sha256):
+        raise HTTPException(status_code=422, detail="Provide a 64-character SHA-256 hash.")
+    status = _ensure_bodmas_index()
+    if not status.get("available"):
+        raise HTTPException(status_code=503, detail="BODMAS metadata is unavailable.")
+    match = _bodmas_lookup(sha256)
+    return {"sha256": sha256.lower(), "match": bool(match), "record": match,
+            "source": "local BODMAS metadata", "live_reputation": False,
+            "meaning": "A malware match is historical dataset evidence, not proof that the current file is active malware. No match is inconclusive."}
+
+
+@app.post("/api/malware/scan")
+def scan_directory_against_bodmas(payload: MalwareScanRequest):
+    """Hash files and compare with historical BODMAS metadata; optionally move confirmed dataset matches to quarantine."""
+    if os.name != "nt":
+        # Read-only hashing is portable; quarantine is deliberately Windows-only in this initial agent.
+        if payload.quarantine_matches:
+            raise HTTPException(status_code=501, detail="Quarantine action is currently supported only on Windows.")
+    status = _ensure_bodmas_index()
+    if not status.get("available"):
+        raise HTTPException(status_code=503, detail="BODMAS metadata is unavailable. Place data/bodmas_metadata.csv in the project.")
+    target = Path(payload.directory).expanduser().resolve()
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(status_code=422, detail="Directory does not exist or is not a directory.")
+    # Prevent recursive scanning of the application data/quarantine itself.
+    if target == DATA_DIR.resolve() or DATA_DIR.resolve() in target.parents:
+        raise HTTPException(status_code=422, detail="Do not scan CyberAmour's own data/quarantine directory.")
+    results, checked, skipped, malicious = [], 0, 0, 0
+    for path in target.rglob("*"):
+        if checked + skipped >= payload.max_files:
+            break
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            if QUARANTINE_DIR.resolve() in path.resolve().parents:
+                continue
+            checked += 1
+            sha = _hash_file(path)
+            record = _bodmas_lookup(sha)
+            if record and record["classification"] == "malware":
+                malicious += 1
+                item = {"path": str(path), "sha256": sha, "classification": "dataset_malware_match",
+                        "family": record.get("family") or "unknown", "sample_timestamp": record.get("timestamp"),
+                        "action": "detected_only"}
+                if payload.quarantine_matches:
+                    # Move, do not delete; retain a hash-based filename to avoid collisions.
+                    dest = QUARANTINE_DIR / f"{sha}_{path.name}"
+                    if dest.exists():
+                        dest = QUARANTINE_DIR / f"{sha}_{uuid.uuid4().hex}_{path.name}"
+                    shutil.move(str(path), str(dest))
+                    item.update({"action": "quarantined", "quarantine_path": str(dest)})
+                    log_event("local-user", "bodmas_hash_match_quarantined", sha, {"original_path": str(path), "quarantine_path": str(dest), "family": record.get("family")})
+                results.append(item)
+        except (PermissionError, OSError):
+            skipped += 1
+    return {"scan_id": str(uuid.uuid4()), "directory": str(target), "status": "COMPLETE" if skipped == 0 else "PARTIAL",
+            "files_checked": checked, "files_skipped": skipped, "malware_hash_matches": malicious,
+            "quarantine_requested": payload.quarantine_matches, "quarantined": sum(1 for x in results if x["action"] == "quarantined"),
+            "results": results[:500], "database_records": status["records"],
+            "warning": "BODMAS is a historical research dataset. Only exact SHA-256 matches are identified; this is not general malware detection, does not block unknown malware, and does not replace Microsoft Defender."}
 
 
 @app.get("/api/health")
