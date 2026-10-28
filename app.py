@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from soc_detection import analyse_log_lines
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.getenv("CYBERAMOUR_DATA_DIR", str(BASE_DIR / "data")))
@@ -28,7 +29,7 @@ BODMAS_CSV_PATH = Path(os.getenv("BODMAS_CSV_PATH", str(DATA_DIR / "bodmas_metad
 BODMAS_DB_PATH = DATA_DIR / "bodmas_hashes.sqlite3"
 QUARANTINE_DIR = DATA_DIR / "quarantine"
 QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
-ALLOWED_ORIGINS = [x.strip() for x in os.getenv("CYBERAMOUR_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",") if x.strip()]
+ALLOWED_ORIGINS = [x.strip() for x in os.getenv("CYBERAMOUR_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,https://tongaigodfreymapiye-collab.github.io").split(",") if x.strip()]
 
 app = FastAPI(
     title="CyberAmour SOC Integration API",
@@ -100,6 +101,15 @@ def init_db() -> None:
             object_id TEXT,
             details_json TEXT NOT NULL
         )""")
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS soc_detection_events (
+            fingerprint TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            rule_id TEXT NOT NULL,
+            source_ip TEXT,
+            alert_id TEXT,
+            finding_json TEXT NOT NULL
+        )""")
 
 
 init_db()
@@ -168,6 +178,13 @@ class AlertIn(BaseModel):
     technique_ids: list[str] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0, le=1)
     details: dict[str, Any] = Field(default_factory=dict)
+
+
+class LogAnalysisRequest(BaseModel):
+    lines: list[str] = Field(min_length=1, max_length=5000)
+    failed_login_threshold: int = Field(default=6, ge=3, le=100)
+    port_scan_threshold: int = Field(default=10, ge=5, le=1024)
+    persist_alerts: bool = True
 
 
 class LayerTechnique(BaseModel):
@@ -495,6 +512,86 @@ def health():
         "response_enforcement": "disabled-until-authorised-connector-is-configured",
         "timestamp": utc_now(),
     }
+
+
+@app.get("/api/soc/detection-rules")
+def soc_detection_rules():
+    """Describe enabled, deterministic SOC rules and their limitations."""
+    return {
+        "rules": [
+            {"id": "CA-AUTH-001", "name": "Repeated failed authentication", "mitre": ["T1110"], "default_threshold": 6},
+            {"id": "CA-NET-001", "name": "Potential port-scan activity", "mitre": ["T1046"], "default_threshold": 10},
+            {"id": "CA-IOC-001", "name": "Local suspicious-IP indicator match", "mitre": [], "default_threshold": None},
+        ],
+        "mode": "batch_log_analysis",
+        "continuous_monitoring": False,
+        "response_actions_enabled": False,
+    }
+
+
+@app.post("/api/soc/analyze-logs")
+def soc_analyze_logs(payload: LogAnalysisRequest):
+    """Analyse explicitly supplied log lines and optionally persist new detections as SOC alerts."""
+    indicator_env = os.getenv("CYBERAMOUR_SUSPICIOUS_IPS_PATH", "").strip()
+    indicator_path = Path(indicator_env) if indicator_env else None
+    indicators: set[str] = set()
+    if indicator_path and indicator_path.is_file():
+        for line in indicator_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            value = line.strip()
+            if value and not value.startswith("#"):
+                # Only accept literal public IPv4 addresses as indicators.
+                try:
+                    import ipaddress
+                    addr = ipaddress.ip_address(value)
+                    if addr.version == 4 and addr.is_global:
+                        indicators.add(str(addr))
+                except ValueError:
+                    continue
+    result = analyse_log_lines(
+        payload.lines,
+        failed_login_threshold=payload.failed_login_threshold,
+        port_scan_threshold=payload.port_scan_threshold,
+        suspicious_ips=indicators,
+    )
+    created_alerts = []
+    if payload.persist_alerts:
+        for finding in result["findings"]:
+            fingerprint = hashlib.sha256(
+                f'{finding["rule_id"]}|{finding.get("source_ip","")}|{finding.get("event_count",0)}|{json.dumps(finding.get("evidence",[]), sort_keys=True)}'.encode("utf-8")
+            ).hexdigest()
+            with db() as conn:
+                existing = conn.execute("SELECT alert_id FROM soc_detection_events WHERE fingerprint=?", (fingerprint,)).fetchone()
+            if existing:
+                continue
+            alert = AlertIn(
+                title=finding["title"],
+                severity=finding["severity"],
+                source="soc-log-analysis",
+                source_ip=finding.get("source_ip"),
+                technique_ids=finding.get("technique_ids", []),
+                confidence=finding.get("confidence", 0.5),
+                details={
+                    "rule_id": finding["rule_id"],
+                    "event_count": finding.get("event_count", 0),
+                    "rationale": finding["rationale"],
+                    "evidence": finding.get("evidence", []),
+                    "limitations": result["limitations"],
+                },
+            )
+            saved = ingest_alert(alert)
+            with db() as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO soc_detection_events(fingerprint,created_at,rule_id,source_ip,alert_id,finding_json) VALUES(?,?,?,?,?,?)",
+                    (fingerprint, utc_now(), finding["rule_id"], finding.get("source_ip"), saved["id"], json.dumps(finding, ensure_ascii=False)),
+                )
+            created_alerts.append({"id": saved["id"], "rule_id": finding["rule_id"], "title": finding["title"]})
+    result["alerts_created"] = created_alerts
+    result["alerts_created_count"] = len(created_alerts)
+    result["data_source"] = "user-supplied log batch"
+    result["indicator_list"] = str(indicator_path) if indicator_path and indicator_path.is_file() else None
+    if not indicator_path:
+        result["limitations"].append("No local IP indicator list is configured; indicator-match rule is inactive.")
+    return result
 
 
 @app.get("/api/attack/techniques")
